@@ -203,11 +203,11 @@ function get_optimal_partition(W,E_W,res);
 			#pairs=get_decomposition(ix);
 			possibility=zeros(L);
 			
-			#for p=1:L-1
+			for p=1:L-1
 				#possibility[p]=Optimal[pairs[p,1][1],pairs[p,1][end]]+Optimal[pairs[p,2][1],pairs[p,2][end]];
-			#	possibility[p]=Optimal[Z[st_pts[p]],Z[cut_pts[p]]]+Optimal[Z[cut_pts[p]+L],Z[ed_pts[p]]];
-			#end
-			possibility[1:L-1]=Optimal[sub2ind((N,N),Z[st_pts[1:end-1]],Z[cut_pts[1:end-1]])]+Optimal[sub2ind((N,N),Z[cut_pts[1:end-1]+L],Z[ed_pts[1:end-1]])];
+				possibility[p]=Optimal[Z[st_pts[p]],Z[cut_pts[p]]]+Optimal[Z[cut_pts[p]+L],Z[ed_pts[p]]];
+			end
+			#possibility[1:L-1]=Optimal[sub2ind((N,N),Z[st_pts[1:end-1]],Z[cut_pts[1:end-1]])]+Optimal[sub2ind((N,N),Z[cut_pts[1:end-1]+L],Z[ed_pts[1:end-1]])];
 
 			possibility[L]=sum(Q[ix,ix]);
 			Optimal[st[k],ed[k]]=maximum(possibility);
