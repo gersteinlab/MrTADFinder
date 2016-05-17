@@ -425,21 +425,6 @@ function compute_modularity(sigma,Brenorm,sW);
 end
 
 
-function matrix_to_graph(Z);
-    Z=Z-diagm(diag(Z));
-    Z=triu(Z);
-    nnodes=size(Z,1);
-    nedges=sum(Z)/2
-    g=Graphs.simple_graph(nnodes,is_directed=false);
-    for i=1:nnodes;
-        tg=find(Z[i,:]);
-        for j=1:length(tg)
-            Graphs.add_edge!(g,i,tg[j]);
-        end
-    end
-    return g;
-end
-
 #id is the starting loc of a chunk, and d is the length it spans..
 function get_chunks_v2(a,singleton=0);
 	# adopt from a matlab code by Jiro Doke;
@@ -469,41 +454,43 @@ function get_chunks_v2(a,singleton=0);
 	 return id,d;
 end
 
-#it possible to repeat the algorithm in random update,
-#or use the reverse direction update..
-#to do so, we could increase the confidence, but in general not to optimize..
-#the aggregated domains have lower modulairty score in general..
-function get_high_confidence_domains(W,E_W,res,trial,accept);
+function get_high_confidence_boundaries(W,E_W,res,num_trial);
 
 	Z=zeros(size(W));
-	for x=1:trial;
-		final_assign_x, Q1, Brenorm1=optimize_TADs_modlouvain(W,E_W,res,0);
-		i_undeter=find(final_assign_x.<0);
-		Z_tmp=(broadcast(-,final_assign_x,final_assign_x').==0);
-		Z_tmp[i_undeter,i_undeter]=0;
-		Z=Z+Z_tmp;
+	all_bdd_rec=zeros(Int,size(W,1)+1,num_trial);
+	for x=1:num_trial;
+		display(x);
+		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
+		for cc=1:maximum(final_assign_x);
+			idcc=find(final_assign_x.==cc)[1];
+			all_bdd_rec[idcc,x]=1;
+		end
+		if final_assign_x[end].>0
+			all_bdd_rec[end,x]=1;
+		end
 	end
+	bdd_prob_score=mean(all_bdd_rec,2);
+	i_unassign=find(final_assign_x.==0);
+	return bdd_prob_score,i_unassign;
 
-    Z=(Z.>=accept);
-    Z=Z-diagm(diag(Z));
-    g=matrix_to_graph(Z);
-    all_modules_aux=Graphs.connected_components(g);
-	#k=sum(Z,1);   
-    bins2modules=zeros(size(W,1),1);
-    ct=1;
-    for i=1:length(all_modules_aux)
-    	tmp=all_modules_aux[i];
-    	if sum(Z[tmp,tmp])>0
-    		bins2modules[tmp[1]:tmp[end]]=ct;ct=ct+1;
-    	end
-    end
+end
 
-    return bins2modules;
+#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
+#but the boundaries are more confident...
+function get_high_confidence_domains(bdd_prob_score,i_unassign,sig_cut);
+
+	tmp=find(bdd_prob_score.>sig_cut);
+	consensus_bdd=zeros(Int,size(bdd_prob_score));
+	consensus_bdd[tmp]=1;
+	consensus_domains=cumsum(consensus_bdd)[1:end-1];
+	consensus_domains[i_unassign]=0;
+
+    return consensus_domains;
 end
 
 #################################################################################################
 #this code just report, no more filtering..should be identical to bins2modules or final_assign
-#those 0 in bins2modules or final_assign are not reported..
+#those 0 in consensus_domains or final_assign are not reported..
 function report_domains(chr2bins,bin2loc,chr_num,bins2modules)
 
 	u,v=get_chunks_v2(bins2modules,1);
@@ -545,8 +532,9 @@ function report_domains(chr2bins,bin2loc,chr_num,bins2modules)
 end
 
 #for unassigned bins, like dark ones, bins2modules will be zeros
-function TADs_list_to_bins(TADs_list,chr_num,chr2bins,bin2loc);
+function TADs_list_to_bins(TADs_list,chr2bins);
     
+    chr_num=change_chr(TADs_list[:chr][1]);
     stc=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
     edc=chr2bins[:,chr_num][2]+1;#we here shift it..
     bins2modules=zeros(Int,edc-stc+1,1);
@@ -556,8 +544,8 @@ function TADs_list_to_bins(TADs_list,chr_num,chr2bins,bin2loc);
     #this will be the array mapped by elements in the chr of interest.
 
     for i=1:size(TADs_list,1);
-        stm=find(chr2all_bin.==TADs_list[i,4])[1];
-        edm=find(chr2all_bin.==TADs_list[i,5])[1];
+        stm=find(chr2all_bin.==TADs_list[i,4]+1)[1];
+        edm=find(chr2all_bin.==TADs_list[i,5]+1)[1];
         bins2modules[stm:edm]=TADs_list[i,6];
     end
 
@@ -565,18 +553,30 @@ function TADs_list_to_bins(TADs_list,chr_num,chr2bins,bin2loc);
 
 end
 
-function report_boundaries(TADs_list)
+
+function report_boundaries(consensus_domains,chr_num,bin2loc);
+
+	xxx=zeros(Int,length(consensus_domains)+1);
+	for cc=1:maximum(consensus_domains);
+		idcc=find(consensus_domains.==cc)[1];
+		xxx[idcc]=1;
+	end
     
-    chr_string=TADs_list[:chr][1];
-    TADs_boundaries=DataFrame(chr=ASCIIString[],Bst=Int64[],Bend=Int64[]);
-    # forget the 1st ...
-    for i=1:size(TADs_list,1)-1;
-        if TADs_list[i+1,4]-TADs_list[i,5]<1 #Dixon file organized as 0...
-            push!(TADs_boundaries,[chr_string TADs_list[i+1,2] TADs_list[i+1,2]]);
-        elseif TADs_list[i+1,4]-TADs_list[i,5]>=1
-            push!(TADs_boundaries,[chr_string TADs_list[i,3] TADs_list[i+1,2]]);
-        end
+    chr_string=change_chr(chr_num);
+    TADs_boundaries=DataFrame(chr=ASCIIString[],Bdd=Int64[]);
+
+    i_bdd=find(xxx.>0);
+    i_chr=find(bin2loc[1,:].==chr_num-1);
+    bin_st=bin2loc[2,i_chr];
+    bin_ed=bin2loc[3,i_chr];
+    
+    for i=1:length(i_bdd);
+    	push!(TADs_boundaries,[chr_string bin_st[i_bdd[i]]]);
     end
+    if consensus_domains[end].>0
+		push!(TADs_boundaries,[chr_string bin_ed[end]]);
+	end
+
     return TADs_boundaries;
 
 end
@@ -585,7 +585,6 @@ function generate_TADs_bed(TAD_list,out_file);
 	X=[TAD_list[:chr] TAD_list[:domain_st] TAD_list[:domain_ed]];
 	writedlm(out_file,X);
 end
-
 
 function show_mat(bins2modules);
     
@@ -601,7 +600,6 @@ function show_mat(bins2modules);
     return allTADs;
 
 end
-
 
 #the bed file has only chr num, st pos and end pos..
 function read_TADs_bed(input_file,bin2loc,chr2bins,chr_num)
@@ -632,6 +630,12 @@ end
 
 
 #################################################################################################
+#shall we introduce more metrics to cf. boundaries?
+#Bing Ren's idea of boundary conservation is very complicated..it's based on correlation vector of directionatlity index
+#centered at the center of the boundary..
+
+
+
 function MI_two_partitions(a1,a2);
 
     m1=maximum(a1);
@@ -666,11 +670,17 @@ function swap_TADs(b2m);
 	u,v=get_chunks_v2(b2m,1);
 	r=randperm(length(u));
 	b2m_r=zeros(size(b2m));
-	st=1;
+	count_pos=1;
+	count_d=1;
 	for i=1:length(u)
 		j=r[i];
-		b2m_r[st:st+v[j]-1]=b2m[u[j]];
-		st=st+v[j];
+		if b2m[u[j]]>0
+			b2m_r[count_pos:count_pos+v[j]-1]=count_d;
+			count_d=count_d+1;
+		else
+			b2m_r[count_pos:count_pos+v[j]-1]=0;
+		end
+		count_pos=count_pos+v[j];
 	end
 	return b2m_r;
 end
