@@ -470,6 +470,7 @@ function get_high_confidence_boundaries(W,E_W,res,num_trial);
 		end
 	end
 	bdd_prob_score=mean(all_bdd_rec,2);
+	final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
 	i_unassign=find(final_assign_x.==0);
 	return bdd_prob_score,i_unassign;
 
@@ -479,7 +480,7 @@ end
 #but the boundaries are more confident...
 function get_high_confidence_domains(bdd_prob_score,i_unassign,sig_cut);
 
-	tmp=find(bdd_prob_score.>sig_cut);
+	tmp=find(bdd_prob_score.>=sig_cut);
 	consensus_bdd=zeros(Int,size(bdd_prob_score));
 	consensus_bdd[tmp]=1;
 	consensus_domains=cumsum(consensus_bdd)[1:end-1];
