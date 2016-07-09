@@ -8,6 +8,48 @@ using CurveFit;
 using Distributions;
 
 ###################################################################################
+function get_expect_vs_d_v2(contacts,chr2bins,Nall);
+
+	f_dall=zeros(Nall);
+	tt_dall=zeros(Nall);
+
+	for chr_num=1:24
+
+		display(chr_num);
+	
+		W=extract_chr(contacts,chr2bins,chr_num);
+		W=full(W);
+		W[isnan(W)]=0;
+		dark_bins=find(sum(W,1).==0);
+		N=size(W,1);
+		f_d=zeros(N);
+		tt_d=zeros(N);
+
+		for d=0:N-1
+
+			cd=diag(W,d);
+			x=collect(1:N-d);
+			y=collect(1+d:N);
+			#d =1 means 1 vs 2, 2 vs 3.....
+			is_okx=zeros(size(x));
+			is_oky=zeros(size(y));
+			for k=1:length(x)
+				is_okx[k]=x[k] in dark_bins;
+				is_oky[k]=y[k] in dark_bins;			
+			end
+			iz=find((1-is_okx).*(1-is_oky).>0);
+			f_d[d+1]=sum(cd[iz]);
+			tt_d[d+1]=length(iz);
+		end
+
+		f_dall[1:length(f_d)]=f_dall[1:length(f_d)]+f_d;
+		tt_dall[1:length(f_d)]=tt_dall[1:length(f_d)]+tt_d;
+	end
+	expect_d=f_dall./tt_dall;
+	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
+
+end
+
 function get_expect_vs_d(W);
 
 	W[isnan(W)]=0;
@@ -57,7 +99,7 @@ function fit_expect_d(expect_d);
 
 	iz=find(expect_d.==0)[1];
 	x1=x[1:iz-1];
-	y1=expect_d[1:iz-1]
+	y1=expect_d[1:iz-1];
 
 	#x1=x[expect_d.>0];
 	#y1=expect_d[expect_d.>0];
@@ -338,6 +380,7 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
 	    while (gain==1)
     	    gain = 0;
         	for j=1:Nb
+        		#display(j);
             	x=u[j];
             	spin=sigma[x];
             	if x==1
@@ -380,6 +423,7 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
   		Bcompact_renorm=zeros(N_renorm,N_renorm);
 
 	    for i=1:N_renorm
+	    	#display(i);
     	    for j=1:N_renorm
         	    Bcompact_renorm[i,j]=sum(sum(Bcompact[sigma.==usigma[i],sigma.==usigma[j]]));
         	end
@@ -454,13 +498,15 @@ function get_chunks_v2(a,singleton=0);
 	 return id,d;
 end
 
-function get_high_confidence_boundaries(W,E_W,res,num_trial);
+function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut);
 
 	Z=zeros(size(W));
 	all_bdd_rec=zeros(Int,size(W,1)+1,num_trial);
+	all_final_assign=zeros(Int,size(W,1),num_trial);
 	for x=1:num_trial;
 		display(x);
 		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
+		all_final_assign[:,x]=final_assign_x;
 		for cc=1:maximum(final_assign_x);
 			idcc=find(final_assign_x.==cc)[1];
 			all_bdd_rec[idcc,x]=1;
@@ -470,36 +516,54 @@ function get_high_confidence_boundaries(W,E_W,res,num_trial);
 		end
 	end
 	bdd_prob_score=mean(all_bdd_rec,2);
-	final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
-	i_unassign=find(final_assign_x.==0);
-	return bdd_prob_score,i_unassign;
-
-end
-
-#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
-#but the boundaries are more confident...
-function get_high_confidence_domains(bdd_prob_score,i_unassign,sig_cut);
-
+	#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
+	#but the boundaries are more confident...
+	
 	tmp=find(bdd_prob_score.>=sig_cut);
 	consensus_bdd=zeros(Int,size(bdd_prob_score));
 	consensus_bdd[tmp]=1;
 	consensus_domains=cumsum(consensus_bdd)[1:end-1];
+	unassign_score=mean(all_final_assign.==0,2)
+	i_unassign=find(unassign_score.>=sig_cut);
 	consensus_domains[i_unassign]=0;
+	TADs=consensus_domains+0;
+	(a,b)=hist(TADs,collect(-.5:maximum(TADs)+1));
+	b=b[2:end];
+	#make sure all domains have pos number of reads..it common that some bins with zero
+	#entry in diagonal form a single domains...
+	aux=zeros(size(b));
+	for j=1:length(b);
+		iz=find(TADs.==j);
+		if sum(W[iz,iz]).==0
+			TADs[iz]=0;
+			aux[j]=1;
+		end
+	end
 
-    return consensus_domains;
+	TADs_final=relabel_communities(TADs)-1;
+
+	bdd_aux=sign(TADs_final);
+	bdd_aux=[bdd_aux;0]+[0;bdd_aux];
+
+	bdd_prob_score=bdd_prob_score.*sign(bdd_aux);
+
+    return bdd_prob_score,bdd_aux,TADs_final;
+
+    #bdd_prob_score.*(bdd_aux==2) to get the 2-sided boundaries
+    #bdd_prob_score.*(bdd_aux==1) to get the 1-sided boundaries
+
 end
 
 #################################################################################################
-#this code just report, no more filtering..should be identical to bins2modules or final_assign
-#those 0 in consensus_domains or final_assign are not reported..
-function report_domains(chr2bins,bin2loc,chr_num,bins2modules)
+#this code just report, no more filtering..
+function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
 
-	u,v=get_chunks_v2(bins2modules,1);
+	u,v=get_chunks_v2(TADs_final,1);
 	TAD_st=Int64[];
 	TAD_ed=Int64[];
 
 	for i=1:length(u);
-		if bins2modules[u[i]]>0
+		if TADs_final[u[i]]>0
 			push!(TAD_st,u[i])
 			push!(TAD_ed,u[i]+v[i]-1);
 		end
@@ -532,59 +596,47 @@ function report_domains(chr2bins,bin2loc,chr_num,bins2modules)
     return TADs_list
 end
 
-#for unassigned bins, like dark ones, bins2modules will be zeros
-function TADs_list_to_bins(TADs_list,chr2bins);
+
+#function report_boundaries(consensus_domains,chr_num,bin2loc);
+
+#	xxx1=zeros(Int,length(consensus_domains)+1);
+#	for cc=1:maximum(consensus_domains);
+#		idcc=find(consensus_domains.==cc)[1];
+#		xxx1[idcc]=1;
+#	end
+
+#	xxx2=zeros(Int,length(consensus_domains)+1);
+#	for cc=1:maximum(consensus_domains);
+#		idcc2=find(consensus_domains.==cc)[end]+1;
+#		xxx2[idcc2]=1;
+#	end
+
+#	xxx=sign(xxx1+xxx2);
     
-    chr_num=change_chr(TADs_list[:chr][1]);
-    stc=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
-    edc=chr2bins[:,chr_num][2]+1;#we here shift it..
-    bins2modules=zeros(Int,edc-stc+1,1);
-    size_chr=length(bins2modules);
+#   chr_string=change_chr(chr_num);
+#    TADs_boundaries=DataFrame(chr=ASCIIString[],Bdd=Int64[]);
 
-    chr2all_bin=collect(stc:edc);
-    #this will be the array mapped by elements in the chr of interest.
-
-    for i=1:size(TADs_list,1);
-        stm=find(chr2all_bin.==TADs_list[i,4]+1)[1];
-        edm=find(chr2all_bin.==TADs_list[i,5]+1)[1];
-        bins2modules[stm:edm]=TADs_list[i,6];
-    end
-
-    return bins2modules;
-
-end
-
-
-function report_boundaries(consensus_domains,chr_num,bin2loc);
-
-	xxx=zeros(Int,length(consensus_domains)+1);
-	for cc=1:maximum(consensus_domains);
-		idcc=find(consensus_domains.==cc)[1];
-		xxx[idcc]=1;
-	end
+#    i_bdd=find(xxx.>0);
+#    i_chr=find(bin2loc[1,:].==chr_num-1);
+#    bin_st=bin2loc[2,i_chr];
+#    bin_ed=bin2loc[3,i_chr];
     
-    chr_string=change_chr(chr_num);
-    TADs_boundaries=DataFrame(chr=ASCIIString[],Bdd=Int64[]);
+#    for i=1:length(i_bdd);
+#    	push!(TADs_boundaries,[chr_string bin_st[i_bdd[i]]]);
+#    end
+#    if consensus_domains[end].>0
+#		push!(TADs_boundaries,[chr_string bin_ed[end]]);
+#	end
 
-    i_bdd=find(xxx.>0);
-    i_chr=find(bin2loc[1,:].==chr_num-1);
-    bin_st=bin2loc[2,i_chr];
-    bin_ed=bin2loc[3,i_chr];
-    
-    for i=1:length(i_bdd);
-    	push!(TADs_boundaries,[chr_string bin_st[i_bdd[i]]]);
-    end
-    if consensus_domains[end].>0
-		push!(TADs_boundaries,[chr_string bin_ed[end]]);
-	end
+#    return TADs_boundaries;
 
-    return TADs_boundaries;
-
-end
+#end
 
 function generate_TADs_bed(TAD_list,out_file);
+
 	X=[TAD_list[:chr] TAD_list[:domain_st] TAD_list[:domain_ed]];
 	writedlm(out_file,X);
+
 end
 
 function show_mat(bins2modules);
@@ -612,13 +664,13 @@ function read_TADs_bed(input_file,bin2loc,chr2bins,chr_num)
 	i_ren=find(all_Ren_TADs[:1].==chr);
 	Ren_TADs_chr=all_Ren_TADs[i_ren,:];
 	if chr_num.>1
-		tmp=chr2bins[2,chr_num-1];
+		tmp=chr2bins[2,chr_num-1]+1;#tmp+1 correct the problem in previous round..
 	else 
-		tmp=0;
+		tmp=1;
 	end
 
-	Ren_TADs_chr[:x4]=tmp+round(Int64,floor(Ren_TADs_chr[:x2]/40000));
-	Ren_TADs_chr[:x5]=tmp+round(Int64,floor(Ren_TADs_chr[:x3]/40000));
+	Ren_TADs_chr[:x4]=tmp+round(Int64,floor(Ren_TADs_chr[:x2]/40000)+1);
+	Ren_TADs_chr[:x5]=tmp+round(Int64,floor(Ren_TADs_chr[:x3]/40000)+1);
 	Ren_TADs_chr[:x6]=collect(1:size(Ren_TADs_chr,1));
 	rename!(Ren_TADs_chr,:x1,:chr)
 	rename!(Ren_TADs_chr,:x4,:domain_st_bin)
@@ -629,16 +681,64 @@ function read_TADs_bed(input_file,bin2loc,chr2bins,chr_num)
 	return Ren_TADs_chr;
 end
 
+#for unassigned bins, like dark ones, bins2modules will be zeros
+function TADs_list_to_bins(TADs_list,chr2bins);
+    
+    chr_num=change_chr(TADs_list[:chr][1]);
+    stc=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
+    edc=chr2bins[:,chr_num][2]+1;#we here shift it..
+    bins2modules=zeros(Int,edc-stc+1,1);
+    size_chr=length(bins2modules);
 
-#################################################################################################
-#shall we introduce more metrics to cf. boundaries?
-#Bing Ren's idea of boundary conservation is very complicated..it's based on correlation vector of directionatlity index
-#centered at the center of the boundary..
+    chr2all_bin=collect(stc:edc);
+    #this will be the array mapped by elements in the chr of interest.
 
+    for i=1:size(TADs_list,1);
+        stm=find(chr2all_bin.==TADs_list[i,4])[1];
+        edm=find(chr2all_bin.==TADs_list[i,5])[1];
+        bins2modules[stm:edm]=TADs_list[i,6];
+    end
 
+    return bins2modules;
+
+end
+
+function get_bdd_loc(is_bdd,chr_num,bin2loc)
+
+	bin_size=bin2loc[3,1]-bin2loc[2,1]+1;
+	i_bdd=find(is_bdd);
+	i_pick=find(bin2loc[1,:].==chr_num-1);
+	st=bin2loc[2,i_pick];
+	ed=bin2loc[3,i_pick];
+	bdd_loc=[st ed[end]];
+	bdd_loc_array=zeros(Int,bdd_loc[end]);
+	L=ed[end];
+	bdd_loc=bdd_loc[i_bdd];
+	for j=1:length(bdd_loc);
+		iz=collect(bdd_loc[j]-Int(bin_size/2):1:bdd_loc[j]+Int(bin_size/2));
+		iz=iz[(iz.>0).*(iz.<=L)];
+		bdd_loc_array[iz]=1;
+	end
+	
+	return bdd_loc,bdd_loc_array;
+end
+
+#use this code for boundary, which is defined by 2 bins...
+#the first and last bdd therefor should not fit..
+function get_local_interaction_strength(bdd,W,win_size);
+	ib=collect(bdd[1]-1:bdd[1]);
+	ia=collect(bdd[2]:bdd[2]+1);
+	ia=ia[ia.>win_size-1];
+	ib=ib[ib.<size(W,1)-win_size]+1;
+	int_strength=(sum(W[ib,ib])+sum(W[ia,ia]))/(sum(W[ib,ia])+sum(W[ia,ib]));
+	return int_strength;
+end
 
 function MI_two_partitions(a1,a2);
 
+	iz=find(a1+a2.>0);
+	a1=a1[iz];
+	a2=a2[iz];
     m1=maximum(a1);
     m2=maximum(a2);
     (u1,v1)=hist(a1,-.5:m1+.5)
@@ -685,6 +785,22 @@ function swap_TADs(b2m);
 	end
 	return b2m_r;
 end
+
+function swap_boundaries(is_bdd);
+	is_bdd_r=BitArray(size(is_bdd));
+	is_bdd_r[:]=false;
+	u=find(is_bdd.>0);
+	v=diff(u);
+	v_r=v[randperm(length(v))];
+	is_bdd_r[1]=true;
+	count_pos=1;
+	for i=1:length(v_r);
+		count_pos=count_pos+v_r[i];
+		is_bdd_r[count_pos]=true;
+	end
+	return is_bdd_r;
+end
+
 
 function extend_mat(Z,iz,L);
     (u,v)=ind2sub(size(Z),find(Z.!=0));
