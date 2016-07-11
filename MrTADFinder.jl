@@ -498,6 +498,8 @@ function get_chunks_v2(a,singleton=0);
 	 return id,d;
 end
 
+#this following code is the basic TAD calling code, if we adopt a convention to save the output at a particular 
+#folder, we can use the folder to do a few downstream work
 function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut);
 
 	Z=zeros(size(W));
@@ -594,6 +596,25 @@ function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
     end
 
     return TADs_list
+end
+
+#we assume a folder TADs_loc that store the jld output of all chr
+function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
+	max_TAD=0;
+	all_TADs=[];
+	for chr_num=1:24
+		display(chr_num);
+		TADs_file=TADs_loc*TADs_file_prefix*"_"*change_chr(chr_num)*".jld";
+		d=load(TADs_file);
+		TADs=d["TADs"];
+		TADs[TADs.>0]=TADs[TADs.>0]+max_TAD;
+		all_TADs=[all_TADs;TADs];
+		max_TAD=maximum(TADs);
+	end
+	all_TADs=[all_TADs;0];
+
+	return all_TADs;
+	#this is the genome-wide bin to TAD map..
 end
 
 
