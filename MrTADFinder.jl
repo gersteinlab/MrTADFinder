@@ -13,6 +13,16 @@ function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 	f_dall=zeros(Nall);
 	tt_dall=zeros(Nall);
 
+	intra_sum=zeros(24);
+
+	contacts[isnan(contacts)]=0;
+
+	S=sum(contacts);
+
+	Neff=sum(sum(contacts,1).>0);
+
+	Neff_intra=zeros(24);
+
 	for chr_num=1:24
 
 		display(chr_num);
@@ -24,6 +34,9 @@ function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 		N=size(W,1);
 		f_d=zeros(N);
 		tt_d=zeros(N);
+
+		Neff_intra[chr_num]=N-length(dark_bins);
+		intra_sum[chr_num]=sum(W);
 
 		for d=0:N-1
 
@@ -44,9 +57,19 @@ function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 
 		f_dall[1:length(f_d)]=f_dall[1:length(f_d)]+f_d;
 		tt_dall[1:length(f_d)]=tt_dall[1:length(f_d)]+tt_d;
+	
+
 	end
+
+
 	expect_d=f_dall./tt_dall;
 	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
+	inter_sum=S-sum(intra_sum);
+
+	inter_chr_expect=inter_sum./(Neff^2-sum(Neff_intra.^2));
+
+
+	return expect_d,inter_chr_expect;
 
 end
 
