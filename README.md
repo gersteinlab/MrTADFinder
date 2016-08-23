@@ -15,10 +15,13 @@ MrTADFinder takes an whole-genome-to-whole genome contact map as an input. The c
 1	10687	37  
 1	10690	24    
 1	11123	28  
+...  
 
 The first 2 columns are indices of genomic bins, and the third column represents the contact frequency (corresponding matrix elements). This simple format has been widely used by mapping tools such as HiCPro.
 
-The mapping between chromosome and genomics bins is specified by an annotation file. To bin the human genome (hg19) in 40kb bin size, an annotation file in the following format is provided (see ./data/bins_file):
+The mapping between chromosome and genomics bins is specified by two annotation files. 
+
+To bin the human genome (hg19) in 40kb bin size, an annotation file in the following format is provided (see ./data/bins_file1):
 
 1	chr1	0	6231  
 2	chr2	6232	12311  
@@ -48,17 +51,38 @@ The mapping between chromosome and genomics bins is specified by an annotation f
 
 The first and second columns show the indices and names of various chromosome. Based on a bin size of 40kb, chromosome 1 is divided into 6232 bins (from bin 0 to bin 6231). Apart from the last bin, all the bins are 40kb. In this example, the whole human genome is divided int 77404 bins, and therefore the corresponding contact map is a square matrix of size 77404. Numbers running from 1 to 77404 are used to indexing the contact map file.
 
-Users can use different annotation files for different bin sizes or different organisms.
+The 2nd file has the form
+
+0	1	40000  
+0	40001	80000  
+0	80001	120000  
+0	120001	160000  
+0	160001	200000  
+0	200001	240000  
+0	240001	280000  
+0	280001	320000  
+0	320001	360000  
+0	360001	400000  
+
+Annotation files based on binning human genome (hg19) in 40kb are provided. Users can use different annotation files for different bin sizes or different organisms.
 
 ##OUTPUT FILE:
 
+Output file is simply a bed file that stores a list of TADs (chromosome number, start and end coordinates).  
 
 
 ##USAGE:
 
 MrTADFinder is written in Julia. It has been tested in Julia v0.4.3. If Julia and the required packages are installed (see the first few lines in MrTADFinder.jl), one could simply run in the command prompt
 
-> julia run_MrTADFinder.jl contact_map ./data/bins_file 1 2.5 
+> julia run_MrTADFinder.jl contact_map ./data/bins_file1 ./data/bins_file2 res=2.5 10 TAD_chr10.bed
+
+The 1st agrument: contact map.  
+The 2nd and 3rd agruments are the 2 annotation files.  
+The 4th argument is the resolution parameter.
+The 5th argument is the chromosome of interest.  
+The 6th argument is the path and name of the output file.
+
 
 ##REFERENCE:
 
