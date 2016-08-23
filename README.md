@@ -5,16 +5,16 @@ INPUT FILES:
 
 MrTADFinder takes an whole-genome-to-whole genome contact map as an input. The contact map should be a sparse matrix stored in a tab-delimited file as follow
 
-1	1464	39.763096
-1	1768	19.615089
-1	4455	20.027008
-1	4458	70.571343
-1	7368	29.105178
-1	10413	25.488239
-1	10563	30.599715
-1	10687	37.613528
-1	10690	24.078972
-1	11123	28.064027
+1	1464	39  
+1	1768	19  
+1	4455	20  
+1	4458	70  
+1	7368	29  
+1	10413	25  
+1	10563	30    
+1	10687	37  
+1	10690	24    
+1	11123	28  
 
 The first 2 columns are indices of genomic bins, and the third column represents the contact frequency (corresponding matrix elements). This simple format has been widely used by mapping tools such as HiCPro.
 
