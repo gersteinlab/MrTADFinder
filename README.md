@@ -58,7 +58,7 @@ USAGE:
 
 MrTADFinder is written in Julia. It has been tested in Julia v0.4.3. If Julia and the required packages are installed (see the first few lines in MrTADFinder.jl), one could simply run in the command prompt
 
-julia run_MrTADFinder.jl contact_map ./data/bins_file 1 2.5 
+> julia run_MrTADFinder.jl contact_map ./data/bins_file 1 2.5 
 
 FURTHER DETAILS:
 
