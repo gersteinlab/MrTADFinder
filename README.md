@@ -64,6 +64,8 @@ The 2nd file has the form
 0	320001	360000  
 0	360001	400000  
 
+IN this case, there are 77404 lines, representing all genomic bins (chromosome number (0=chr1 etc), start and end points).  
+
 Annotation files based on binning human genome (hg19) in 40kb are provided. Users can use different annotation files for different bin sizes or different organisms.
 
 ##OUTPUT FILE:
@@ -79,7 +81,7 @@ MrTADFinder is written in Julia. It has been tested in Julia v0.4.3. If Julia an
 
 The 1st agrument: contact map.  
 The 2nd and 3rd agruments are the 2 annotation files.  
-The 4th argument is the resolution parameter.
+The 4th argument is the resolution parameter.  
 The 5th argument is the chromosome of interest.  
 The 6th argument is the path and name of the output file.
 
