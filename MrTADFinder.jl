@@ -618,42 +618,6 @@ function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
 	#this is the genome-wide bin to TAD map..
 end
 
-
-#function report_boundaries(consensus_domains,chr_num,bin2loc);
-
-#	xxx1=zeros(Int,length(consensus_domains)+1);
-#	for cc=1:maximum(consensus_domains);
-#		idcc=find(consensus_domains.==cc)[1];
-#		xxx1[idcc]=1;
-#	end
-
-#	xxx2=zeros(Int,length(consensus_domains)+1);
-#	for cc=1:maximum(consensus_domains);
-#		idcc2=find(consensus_domains.==cc)[end]+1;
-#		xxx2[idcc2]=1;
-#	end
-
-#	xxx=sign(xxx1+xxx2);
-    
-#   chr_string=change_chr(chr_num);
-#    TADs_boundaries=DataFrame(chr=ASCIIString[],Bdd=Int64[]);
-
-#    i_bdd=find(xxx.>0);
-#    i_chr=find(bin2loc[1,:].==chr_num-1);
-#    bin_st=bin2loc[2,i_chr];
-#    bin_ed=bin2loc[3,i_chr];
-    
-#    for i=1:length(i_bdd);
-#    	push!(TADs_boundaries,[chr_string bin_st[i_bdd[i]]]);
-#    end
-#    if consensus_domains[end].>0
-#		push!(TADs_boundaries,[chr_string bin_ed[end]]);
-#	end
-
-#    return TADs_boundaries;
-
-#end
-
 function generate_TADs_bed(TAD_list,out_file);
 
 	X=[TAD_list[:chr] TAD_list[:domain_st] TAD_list[:domain_ed]];
@@ -861,66 +825,7 @@ function get_P_value_observed_vs_expected(W,E_polymer);
 	return enrich;
 end
 
-function get_null_d_local(W);
-
-	N=size(W,1);
-	E_W_local=zeros(size(W));
-	for i=1:round(Int,ceil(N/2));
-		z=W[i,:];
-		zf=flipdim(z,2);
-		z1=[zf[1:N-2*i+1]' z];
-		#z1=[zeros(1,N-2*int(i)+1) z];
-		#z2=[fliplr(z) zeros(1,N-2*int(i)+1)];
-		z2=[zf z[2*i:end]'];
-		#z1[N-i+1]=z2[N-i+1];
-		z_null=(z1+z2)/2;
-		st=N-2*i+2;
-		ed=2*N-2*i+1;
-		z_null=z_null[st:ed];
-		E_W_local[i,:]=z_null;
-	end
-	for i=round(Int,ceil(N/2))+1:N;
-		z=W[i,:];
-		zf=flipdim(z,2);
-		#z1=[z zeros(1,2*int(i)-N-1)];
-		z1=[z flipdim(z[1:2*i-N-1]',2)];
-		#z2=[zeros(1,2*int(i)-N-1) fliplr(z)];
-		z2=[z[1:2*i-N-1]' flipdim(z,2)];
-		#z1[i]=z2[i];
-		z_null=(z1+z2)/2;
-		st=1;
-		ed=N;
-		z_null=z_null[st:ed];
-		E_W_local[i,:]=z_null;
-	end
-
-	return E_W_local;
-	#off set by trace(W)/2
-
-end
 
 
-function get_f_d(W,expect_d)
 
-	N=size(W,1);
-	W[isnan(W)]=0;
-	dark_bins=find(sum(W,1).==0);
-	num_dark=length(dark_bins);
-	N_eff=N-num_dark;
-	f_W=zeros(size(W));
-
-	for d=0:N-1
-		f_W[1+d:N+1:end-d*N]=expect_d[d+1];
-	end
-	tmp=f_W-diagm(diag(f_W));
-	f_W=f_W+tmp';
-	#sum(f_W[1,:])=1 here..
-
-	f_W[dark_bins,:]=0;
-	f_W[:,dark_bins]=0;
-	
-	f_W=f_W/sum(f_W)*N_eff^2;
-	return f_W;
-
-end
 
