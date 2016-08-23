@@ -11,7 +11,8 @@ using Distributions;
 
 function read_WG_contact_map(input_file,N);
 
-	table=readdlm(input_file);
+	table=readdlm(input_file,Int64);
+	#table=readtable(input_file,separator='\t',header=false);
 	A=sparse(table[:,1],table[:,2],table[:,3],N,N);
 	tmp=A-spdiagm(diag(A));
 	A=A+tmp';
@@ -90,47 +91,6 @@ function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 
 
 	return expect_d,inter_chr_expect;
-
-end
-
-function get_expect_vs_d(W);
-
-	W[isnan(W)]=0;
-
-	dark_bins=find(sum(W,1).==0);
-
-	N=size(W,1);
-	
-	f_d=zeros(N);
-	tt_d=zeros(N);
-
-	#use the one with dark bins...
-	#sum of all f_d are the reads..	
-	#tt_d are the number of loci pairs separated by a distance d
-	#f_d are the number of contacts between loci pairs separated by a distance d
-	#f_d./tt_d is expectation..
-	for d=0:N-1
-		#display(d);
-		cd=diag(W,d);
-		x=collect(1:N-d);
-		y=collect(1+d:N);
-		#d =1 means 1 vs 2, 2 vs 3.....
-		is_okx=zeros(size(x));
-		is_oky=zeros(size(y));
-		for k=1:length(x)
-			is_okx[k]=x[k] in dark_bins;
-			is_oky[k]=y[k] in dark_bins;			
-		end
-		iz=find((1-is_okx).*(1-is_oky).>0);
-		f_d[d+1]=sum(cd[iz]);
-		tt_d[d+1]=length(iz);
-	end
-
-	expect_d=f_d./tt_d;
-	expect_d[isnan(expect_d)]=0;
-	#NB. we average out the coverage for all loci in this calculation..
-
-	return expect_d;
 
 end
 
@@ -325,9 +285,64 @@ function get_decomposition(ix);
 	return pairs;
 end
 
-
-
 ###################################################################################
+#this following code is the basic TAD calling code
+function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut);
+
+	Z=zeros(size(W));
+	all_bdd_rec=zeros(Int,size(W,1)+1,num_trial);
+	all_final_assign=zeros(Int,size(W,1),num_trial);
+	for x=1:num_trial;
+		display(x);
+		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
+		all_final_assign[:,x]=final_assign_x;
+		for cc=1:maximum(final_assign_x);
+			idcc=find(final_assign_x.==cc)[1];
+			all_bdd_rec[idcc,x]=1;
+		end
+		if final_assign_x[end].>0
+			all_bdd_rec[end,x]=1;
+		end
+	end
+	bdd_prob_score=mean(all_bdd_rec,2);
+	#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
+	#but the boundaries are more confident...
+	
+	tmp=find(bdd_prob_score.>=sig_cut);
+	consensus_bdd=zeros(Int,size(bdd_prob_score));
+	consensus_bdd[tmp]=1;
+	consensus_domains=cumsum(consensus_bdd)[1:end-1];
+	unassign_score=mean(all_final_assign.==0,2)
+	i_unassign=find(unassign_score.>=sig_cut);
+	consensus_domains[i_unassign]=0;
+	TADs=consensus_domains+0;
+	(a,b)=hist(TADs,collect(-.5:maximum(TADs)+1));
+	b=b[2:end];
+	#make sure all domains have pos number of reads..it is common that some bins with zero
+	#entry in diagonal form a single domains...
+	aux=zeros(size(b));
+	for j=1:length(b);
+		iz=find(TADs.==j);
+		if sum(W[iz,iz]).==0
+			TADs[iz]=0;
+			aux[j]=1;
+		end
+	end
+
+	TADs_final=relabel_communities(TADs)-1;
+
+	bdd_aux=sign(TADs_final);
+	bdd_aux=[bdd_aux;0]+[0;bdd_aux];
+
+	bdd_prob_score=bdd_prob_score.*sign(bdd_aux);
+
+	#bdd_prob_score.*(bdd_aux==2) to get the 2-sided boundaries
+    #bdd_prob_score.*(bdd_aux==1) to get the 1-sided boundaries
+
+    return bdd_prob_score,bdd_aux,TADs_final;
+
+end
+
 #un-assigned bins are darks bin, not playing role...
 function optimize_TADs_modlouvain(W,E_W,res,order=1);
 #B is the generalized modularity matrix, and sW is sum of all elts in W, ~ to 2M
@@ -541,64 +556,6 @@ function get_chunks_v2(a,singleton=0);
 	 return id,d;
 end
 
-#this following code is the basic TAD calling code, if we adopt a convention to save the output at a particular 
-#folder, we can use the folder to do a few downstream work
-function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut);
-
-	Z=zeros(size(W));
-	all_bdd_rec=zeros(Int,size(W,1)+1,num_trial);
-	all_final_assign=zeros(Int,size(W,1),num_trial);
-	for x=1:num_trial;
-		display(x);
-		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
-		all_final_assign[:,x]=final_assign_x;
-		for cc=1:maximum(final_assign_x);
-			idcc=find(final_assign_x.==cc)[1];
-			all_bdd_rec[idcc,x]=1;
-		end
-		if final_assign_x[end].>0
-			all_bdd_rec[end,x]=1;
-		end
-	end
-	bdd_prob_score=mean(all_bdd_rec,2);
-	#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
-	#but the boundaries are more confident...
-	
-	tmp=find(bdd_prob_score.>=sig_cut);
-	consensus_bdd=zeros(Int,size(bdd_prob_score));
-	consensus_bdd[tmp]=1;
-	consensus_domains=cumsum(consensus_bdd)[1:end-1];
-	unassign_score=mean(all_final_assign.==0,2)
-	i_unassign=find(unassign_score.>=sig_cut);
-	consensus_domains[i_unassign]=0;
-	TADs=consensus_domains+0;
-	(a,b)=hist(TADs,collect(-.5:maximum(TADs)+1));
-	b=b[2:end];
-	#make sure all domains have pos number of reads..it common that some bins with zero
-	#entry in diagonal form a single domains...
-	aux=zeros(size(b));
-	for j=1:length(b);
-		iz=find(TADs.==j);
-		if sum(W[iz,iz]).==0
-			TADs[iz]=0;
-			aux[j]=1;
-		end
-	end
-
-	TADs_final=relabel_communities(TADs)-1;
-
-	bdd_aux=sign(TADs_final);
-	bdd_aux=[bdd_aux;0]+[0;bdd_aux];
-
-	bdd_prob_score=bdd_prob_score.*sign(bdd_aux);
-
-    return bdd_prob_score,bdd_aux,TADs_final;
-
-    #bdd_prob_score.*(bdd_aux==2) to get the 2-sided boundaries
-    #bdd_prob_score.*(bdd_aux==1) to get the 1-sided boundaries
-
-end
-
 #################################################################################################
 #this code just report, no more filtering..
 function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
@@ -643,6 +600,7 @@ end
 
 #we assume a folder TADs_loc that store the jld output of all chr
 function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
+	
 	max_TAD=0;
 	all_TADs=[];
 	for chr_num=1:24
