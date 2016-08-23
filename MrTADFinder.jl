@@ -11,9 +11,9 @@ using Distributions;
 
 function read_WG_contact_map(input_file,N);
 
-	table=readdlm(input_file,Int64);
-	#table=readtable(input_file,separator='\t',header=false);
-	A=sparse(table[:,1],table[:,2],table[:,3],N,N);
+	#table=readdlm(input_file,Int64);
+	table=readtable(input_file,separator='\t',header=false);
+	A=sparse(table[:x1],table[:x2],table[:x3],N,N);
 	tmp=A-spdiagm(diag(A));
 	A=A+tmp';
 	out_name="./all_contacts.jld";
