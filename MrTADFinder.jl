@@ -618,10 +618,11 @@ function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
 	#this is the genome-wide bin to TAD map..
 end
 
-function generate_TADs_bed(TAD_list,out_file);
+function generate_TADs_bed(TADs_list,out_file);
 
-	X=[TAD_list[:chr] TAD_list[:domain_st] TAD_list[:domain_ed]];
-	writedlm(out_file,X);
+	writetable(out_file, TADs_list);
+	#X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
+	#writedlm(out_file,X);
 
 end
 

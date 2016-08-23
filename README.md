@@ -70,8 +70,20 @@ Annotation files based on binning human genome (hg19) in 40kb are provided. User
 
 ##OUTPUT FILE:
 
-Output file is simply a bed file that stores a list of TADs (chromosome number, start and end coordinates).  
+Output file is simply a csv file that stores a list of TADs (chromosome number, start and end coordinates).
 
+"chr","domain_st","domain_ed","domain_st_bin","domain_ed_bin","idx"  
+"chr10",40001,200000,42015,42018,1  
+"chr10",200001,880000,42019,42035,2  
+"chr10",880001,1120000,42036,42041,3  
+"chr10",1120001,1160000,42042,42042,4  
+"chr10",1160001,1200000,42043,42043,5  
+"chr10",1200001,1240000,42044,42044,6  
+"chr10",1240001,1280000,42045,42045,7  
+"chr10",1280001,1320000,42046,42046,8  
+"chr10",1320001,1360000,42047,42047,9  
+
+The bins defined by the annotation files are provided in the 4th and 5th columns.
 
 ##USAGE:
 
