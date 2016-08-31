@@ -43,6 +43,8 @@ Nall=maximum(chr2bins[2,:]-chr2bins[1,:])+1;
 #load contact map
 contacts=read_WG_contact_map(map_file,N);
 W=extract_chr(contacts,chr2bins,pick_chr);
+#use the next line to save the contact map in JLD format
+#save("./all_contacts.jld","interaction",W);
 
 #genome-wide expectation
 expect_d,inter_chr_expect=get_expect_vs_d_v2(contacts,chr2bins,Nall);

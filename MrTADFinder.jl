@@ -1,7 +1,7 @@
-using HDF5; 
+#using HDF5; 
 using JLD;
-using MAT;
-using Graphs;
+#using MAT;
+#using Graphs;
 using DataFrames;
 #using Winston
 using CurveFit;
@@ -16,9 +16,7 @@ function read_WG_contact_map(input_file,N);
 	A=sparse(table[:x1],table[:x2],table[:x3],N,N);
 	tmp=A-spdiagm(diag(A));
 	A=A+tmp';
-	out_name="./all_contacts.jld";
-	save(out_name,"interaction",A);
-
+	
 	return A;
 end
 
@@ -198,92 +196,7 @@ function get_null_polymer(W,f_W,err_threshold);
 	return coverage_est_new,E_W;
 end
 
-###################################################################################
-function get_optimal_partition(W,E_W,res);
-	
-	Q=W-E_W*res;
-	Optimal=zeros(size(Q));
-	#traceback_aux=Array(Any,size(Q));
-	traceback_aux=zeros(size(Q));
-	for i=1:size(Q,1);
-		Optimal[i,i]=Q[i,i];
-		#traceback_aux[i,i]=[1];
-		traceback_aux[i,i]=1;
-	end
-	N=size(Q,1);
-	x=collect(1:N);
 
-	for L=2:N;
-		display(L);
-		st,ed=get_all_substrings(x,L);
-		st_pts=collect(1:L);
-		cut_pts=collect(1:L+1:L^2);
-		ed_pts=collect(L^2-L+1:L^2);
-		for k=1:length(st)
-			ix=collect(st[k]:ed[k]);
-			Z=repmat(ix,1,L)';
-			#pairs=get_decomposition(ix);
-			possibility=zeros(L);
-			
-			for p=1:L-1
-				#possibility[p]=Optimal[pairs[p,1][1],pairs[p,1][end]]+Optimal[pairs[p,2][1],pairs[p,2][end]];
-				possibility[p]=Optimal[Z[st_pts[p]],Z[cut_pts[p]]]+Optimal[Z[cut_pts[p]+L],Z[ed_pts[p]]];
-			end
-			#possibility[1:L-1]=Optimal[sub2ind((N,N),Z[st_pts[1:end-1]],Z[cut_pts[1:end-1]])]+Optimal[sub2ind((N,N),Z[cut_pts[1:end-1]+L],Z[ed_pts[1:end-1]])];
-
-			possibility[L]=sum(Q[ix,ix]);
-			Optimal[st[k],ed[k]]=maximum(possibility);
-			#traceback_aux[st[k],ed[k]]=find(possibility.==maximum(possibility));
-			traceback_aux[st[k],ed[k]]=indmax(possibility);
-		end
-	end
-
-	active_partition=[];
-	final_partition=[];
-	push!(active_partition,collect(1:N));
-
-	while ~isempty(active_partition)
-		partition=active_partition[1];
-		partition_st=partition[1];
-		partition_ed=partition[end];
-		partition_len=partition_ed-partition_st+1;
-		#pt=traceback_aux[partition_st,partition_ed][1];
-		pt=traceback_aux[partition_st,partition_ed];
-		if pt.==partition_len
-			push!(final_partition,partition);
-			shift!(active_partition);
-		else
-			push!(active_partition,partition[1:pt]);
-			push!(active_partition,partition[pt+1:end]);
-			shift!(active_partition);
-		end
-	end
-
-	final_assign=zeros(Int,N);
-	for i=1:length(final_partition)
-		x=sort(final_partition[i]);
-		final_assign[x[1]:x[end]]=i;
-	end
-
-	return final_assign;
-
-end
-
-function get_all_substrings(x,L);
-	st=collect(1:x[end]-L+1);
-	ed=st+L-1;
-	return st,ed;
-end
-
-function get_decomposition(ix);
-	m=length(ix)-1;
-	pairs=cell(m,2);
-	for pt=1:m
-		pairs[pt,1]=ix[1:pt];
-		pairs[pt,2]=ix[pt+1:end];
-	end
-	return pairs;
-end
 
 ###################################################################################
 #this following code is the basic TAD calling code
@@ -598,6 +511,113 @@ function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
     return TADs_list
 end
 
+function generate_TADs_output(TADs_list,out_file);
+
+	writetable(out_file, TADs_list);
+	#X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
+	#writedlm(out_file,X);
+
+end
+
+function generate_TADs_bed(TADs_list,out_file);
+
+	#writetable(out_file, TADs_list);
+	X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
+	writedlm(out_file,X);
+
+end
+
+###################################################################################
+function get_optimal_partition(W,E_W,res);
+	
+	Q=W-E_W*res;
+	Optimal=zeros(size(Q));
+	#traceback_aux=Array(Any,size(Q));
+	traceback_aux=zeros(size(Q));
+	for i=1:size(Q,1);
+		Optimal[i,i]=Q[i,i];
+		#traceback_aux[i,i]=[1];
+		traceback_aux[i,i]=1;
+	end
+	N=size(Q,1);
+	x=collect(1:N);
+
+	for L=2:N;
+		display(L);
+		st,ed=get_all_substrings(x,L);
+		st_pts=collect(1:L);
+		cut_pts=collect(1:L+1:L^2);
+		ed_pts=collect(L^2-L+1:L^2);
+		for k=1:length(st)
+			ix=collect(st[k]:ed[k]);
+			Z=repmat(ix,1,L)';
+			#pairs=get_decomposition(ix);
+			possibility=zeros(L);
+			
+			for p=1:L-1
+				#possibility[p]=Optimal[pairs[p,1][1],pairs[p,1][end]]+Optimal[pairs[p,2][1],pairs[p,2][end]];
+				possibility[p]=Optimal[Z[st_pts[p]],Z[cut_pts[p]]]+Optimal[Z[cut_pts[p]+L],Z[ed_pts[p]]];
+			end
+			#possibility[1:L-1]=Optimal[sub2ind((N,N),Z[st_pts[1:end-1]],Z[cut_pts[1:end-1]])]+Optimal[sub2ind((N,N),Z[cut_pts[1:end-1]+L],Z[ed_pts[1:end-1]])];
+
+			possibility[L]=sum(Q[ix,ix]);
+			Optimal[st[k],ed[k]]=maximum(possibility);
+			#traceback_aux[st[k],ed[k]]=find(possibility.==maximum(possibility));
+			traceback_aux[st[k],ed[k]]=indmax(possibility);
+		end
+	end
+
+	active_partition=[];
+	final_partition=[];
+	push!(active_partition,collect(1:N));
+
+	while ~isempty(active_partition)
+		partition=active_partition[1];
+		partition_st=partition[1];
+		partition_ed=partition[end];
+		partition_len=partition_ed-partition_st+1;
+		#pt=traceback_aux[partition_st,partition_ed][1];
+		pt=traceback_aux[partition_st,partition_ed];
+		if pt.==partition_len
+			push!(final_partition,partition);
+			shift!(active_partition);
+		else
+			push!(active_partition,partition[1:pt]);
+			push!(active_partition,partition[pt+1:end]);
+			shift!(active_partition);
+		end
+	end
+
+	final_assign=zeros(Int,N);
+	for i=1:length(final_partition)
+		x=sort(final_partition[i]);
+		final_assign[x[1]:x[end]]=i;
+	end
+
+	return final_assign;
+
+end
+
+function get_all_substrings(x,L);
+	st=collect(1:x[end]-L+1);
+	ed=st+L-1;
+	return st,ed;
+end
+
+function get_decomposition(ix);
+	m=length(ix)-1;
+	pairs=cell(m,2);
+	for pt=1:m
+		pairs[pt,1]=ix[1:pt];
+		pairs[pt,2]=ix[pt+1:end];
+	end
+	return pairs;
+end
+
+
+##############################################################################
+#a few useful codes for downstream analysis
+
 #we assume a folder TADs_loc that store the jld output of all chr
 function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
 	
@@ -616,29 +636,6 @@ function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
 
 	return all_TADs;
 	#this is the genome-wide bin to TAD map..
-end
-
-function generate_TADs_bed(TADs_list,out_file);
-
-	writetable(out_file, TADs_list);
-	#X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
-	#writedlm(out_file,X);
-
-end
-
-function show_mat(bins2modules);
-    
-    L=length(bins2modules);
-    iz=find(bins2modules.>0);
-    s2=bins2modules[iz];
-   
-    Z=(broadcast(-,s2,s2').==0)+0;
-    
-    allTADs=extend_mat(Z,iz,L);
-    #imagesc(Z)
-
-    return allTADs;
-
 end
 
 #the bed file has only chr num, st pos and end pos..
@@ -788,6 +785,21 @@ function swap_boundaries(is_bdd);
 	return is_bdd_r;
 end
 
+#bins2modules is a genome-wide bin to TAD map.
+function show_mat(bins2modules);
+    
+    L=length(bins2modules);
+    iz=find(bins2modules.>0);
+    s2=bins2modules[iz];
+   
+    Z=(broadcast(-,s2,s2').==0)+0;
+    
+    allTADs=extend_mat(Z,iz,L);
+    #imagesc(Z)
+
+    return allTADs;
+
+end
 
 function extend_mat(Z,iz,L);
     (u,v)=ind2sub(size(Z),find(Z.!=0));
@@ -825,6 +837,53 @@ function get_P_value_observed_vs_expected(W,E_polymer);
 	
 	return enrich;
 end
+
+#for each bin, bin the replication timing data. This code iuse S1 and S4 to get a consensus domains..
+function get_replication_domains(u)
+	N=length(u);
+	(loc,span)=get_chunks_v2(u.>5);
+	repli_domains=zeros(Int,N);
+	n=1;
+	for i=1:length(loc);
+		repli_domains[loc[i]:loc[i]+span[i]-1]=n;
+		n=n+1;
+	end
+	return repli_domains;
+end
+
+#
+function get_replication_domains_v2(x,outliner_thres,L,thres);
+	#L=10;
+	#thres=.95;
+	x[x.>median(x)*outliner_thres]=median(x)*outliner_thres;
+	b=linspace(1,median(x)*outliner_thres,L);
+	b=flipdim(b,1);
+	r=zeros(size(x));
+	for i=1:length(x)-L+1
+    	r[i]=cor(x[i:i+L-1],b);
+	end
+	a=sign(diff(r));
+	iz=find((a[1:end-1].>0).*(a[2:end].<0));
+	iz=iz[r[iz+1].>thres];
+	domains=[iz iz+L-1];
+
+	return domains;
+
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
