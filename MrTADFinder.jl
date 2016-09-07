@@ -851,8 +851,8 @@ function get_replication_domains(u)
 	return repli_domains;
 end
 
-#
-function get_replication_domains_v2(x,outliner_thres,L,thres);
+#x is the repli-seq binned data, 40kb, 
+function get_timing_transition_regions_v2(x,outliner_thres,L,thres);
 	#L=10;
 	#thres=.95;
 	x[x.>median(x)*outliner_thres]=median(x)*outliner_thres;
@@ -865,11 +865,23 @@ function get_replication_domains_v2(x,outliner_thres,L,thres);
 	a=sign(diff(r));
 	iz=find((a[1:end-1].>0).*(a[2:end].<0));
 	iz=iz[r[iz+1].>thres];
-	domains=[iz iz+L-1];
+	TTR=[iz iz+L-1];
 
-	return domains;
+	b2=flipdim(b,1);
+	r2=zeros(size(x));
+	for i=1:length(x)-L+1
+    	r2[i]=cor(x[i:i+L-1],b2);
+	end
+	a2=sign(diff(r2));
+	iz2=find((a2[1:end-1].>0).*(a2[2:end].<0));
+	iz2=iz2[r2[iz2+1].>thres];
+	TTR2=[iz2 iz2+L-1];
+
+	return TTR,TTR2;
 
 end
+#the first bin is the boundary of CTR, with TTR-present. it's the more important one.
+
 
 
 
