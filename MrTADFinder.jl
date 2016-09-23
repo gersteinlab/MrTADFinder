@@ -92,6 +92,41 @@ function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 
 end
 
+function get_expect_vs_d_single_chr(W,chr2bins);
+
+	W=full(W);
+	W[isnan(W)]=0;
+	dark_bins=find(sum(W,1).==0);
+	N=size(W,1);
+	f_d=zeros(N);
+	tt_d=zeros(N);
+
+	for d=0:N-1
+
+		cd=diag(W,d);
+		x=collect(1:N-d);
+		y=collect(1+d:N);
+		#d =1 means 1 vs 2, 2 vs 3.....
+		is_okx=zeros(size(x));
+		is_oky=zeros(size(y));
+		for k=1:length(x)
+			is_okx[k]=x[k] in dark_bins;
+			is_oky[k]=y[k] in dark_bins;			
+		end			
+		iz=find((1-is_okx).*(1-is_oky).>0);
+		f_d[d+1]=sum(cd[iz]);
+		tt_d[d+1]=length(iz);
+	end
+
+	expect_d=f_d./tt_d;
+	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
+	
+	return f_d,tt_d;
+
+end
+
+
+
 #a new fct for fitting expect_d. a general fct fitting everything may not work...
 #y=Kx^-gamma;
 function fit_expect_d(expect_d);
