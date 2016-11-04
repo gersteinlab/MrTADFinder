@@ -6,183 +6,183 @@ using DataFrames;
 #using Winston
 using CurveFit;
 using Distributions;
+using Interpolations;
 
 ###################################################################################
 
-function read_WG_contact_map(input_file,N);
+# function read_WG_contact_map(input_file,N);
 
-	#table=readdlm(input_file,Int64);
-	table=readtable(input_file,separator='\t',header=false);
-	A=sparse(table[:x1],table[:x2],table[:x3],N,N);
-	tmp=A-spdiagm(diag(A));
-	A=A+tmp';
+# 	#table=readdlm(input_file,Int64);
+# 	table=readtable(input_file,separator='\t',header=false);
+# 	A=sparse(table[:x1],table[:x2],table[:x3],N,N);
+# 	tmp=A-spdiagm(diag(A));
+# 	A=A+tmp';
 	
-	return A;
-end
+# 	return A;
+# end
 
-function extract_chr(A,chr2bins,chr_num);
-	st=1+chr2bins[1,chr_num];
-	ed=1+chr2bins[2,chr_num];
-	A_chr=A[st:ed,st:ed];
-	return A_chr;
-end
+# function extract_chr(A,chr2bins,chr_num);
+# 	st=1+chr2bins[1,chr_num];
+# 	ed=1+chr2bins[2,chr_num];
+# 	A_chr=A[st:ed,st:ed];
+# 	return A_chr;
+# end
 
-function get_expect_vs_d_v2(contacts,chr2bins,Nall);
+# function get_expect_vs_d_v2(contacts,chr2bins,Nall);
 
-	f_dall=zeros(Nall);
-	tt_dall=zeros(Nall);
+# 	f_dall=zeros(Nall);
+# 	tt_dall=zeros(Nall);
 
-	intra_sum=zeros(24);
+# 	intra_sum=zeros(24);
 
-	contacts[isnan(contacts)]=0;
+# 	contacts[isnan(contacts)]=0;
 
-	S=sum(contacts);
+# 	S=sum(contacts);
 
-	Neff=sum(sum(contacts,1).>0);
+# 	Neff=sum(sum(contacts,1).>0);
 
-	Neff_intra=zeros(24);
+# 	Neff_intra=zeros(24);
 
-	for chr_num=1:24
+# 	for chr_num=1:24
 
-		display(chr_num);
+# 		display(chr_num);
 	
-		W=extract_chr(contacts,chr2bins,chr_num);
-		W=full(W);
-		W[isnan(W)]=0;
-		dark_bins=find(sum(W,1).==0);
-		N=size(W,1);
-		f_d=zeros(N);
-		tt_d=zeros(N);
+# 		W=extract_chr(contacts,chr2bins,chr_num);
+# 		W=full(W);
+# 		W[isnan(W)]=0;
+# 		dark_bins=find(sum(W,1).==0);
+# 		N=size(W,1);
+# 		f_d=zeros(N);
+# 		tt_d=zeros(N);
 
-		Neff_intra[chr_num]=N-length(dark_bins);
-		intra_sum[chr_num]=sum(W);
+# 		Neff_intra[chr_num]=N-length(dark_bins);
+# 		intra_sum[chr_num]=sum(W);
 
-		for d=0:N-1
+# 		for d=0:N-1
 
-			cd=diag(W,d);
-			x=collect(1:N-d);
-			y=collect(1+d:N);
-			#d =1 means 1 vs 2, 2 vs 3.....
-			is_okx=zeros(size(x));
-			is_oky=zeros(size(y));
-			for k=1:length(x)
-				is_okx[k]=x[k] in dark_bins;
-				is_oky[k]=y[k] in dark_bins;			
-			end
-			iz=find((1-is_okx).*(1-is_oky).>0);
-			f_d[d+1]=sum(cd[iz]);
-			tt_d[d+1]=length(iz);
-		end
+# 			cd=diag(W,d);
+# 			x=collect(1:N-d);
+# 			y=collect(1+d:N);
+# 			#d =1 means 1 vs 2, 2 vs 3.....
+# 			is_okx=zeros(size(x));
+# 			is_oky=zeros(size(y));
+# 			for k=1:length(x)
+# 				is_okx[k]=x[k] in dark_bins;
+# 				is_oky[k]=y[k] in dark_bins;			
+# 			end
+# 			iz=find((1-is_okx).*(1-is_oky).>0);
+# 			f_d[d+1]=sum(cd[iz]);
+# 			tt_d[d+1]=length(iz);
+# 		end
 
-		f_dall[1:length(f_d)]=f_dall[1:length(f_d)]+f_d;
-		tt_dall[1:length(f_d)]=tt_dall[1:length(f_d)]+tt_d;
+# 		f_dall[1:length(f_d)]=f_dall[1:length(f_d)]+f_d;
+# 		tt_dall[1:length(f_d)]=tt_dall[1:length(f_d)]+tt_d;
 	
 
-	end
+# 	end
 
 
-	expect_d=f_dall./tt_dall;
-	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
-	inter_sum=S-sum(intra_sum);
+# 	expect_d=f_dall./tt_dall;
+# 	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
+# 	inter_sum=S-sum(intra_sum);
 
-	inter_chr_expect=inter_sum./(Neff^2-sum(Neff_intra.^2));
+# 	inter_chr_expect=inter_sum./(Neff^2-sum(Neff_intra.^2));
 
 
-	return expect_d,inter_chr_expect;
+# 	return expect_d,inter_chr_expect;
 
-end
+# end
 
-function get_expect_vs_d_single_chr(W,chr2bins);
+# function get_expect_vs_d_single_chr(W,chr2bins);
 
-	W=full(W);
-	W[isnan(W)]=0;
-	dark_bins=find(sum(W,1).==0);
-	N=size(W,1);
-	f_d=zeros(N);
-	tt_d=zeros(N);
+# 	W=full(W);
+# 	W[isnan(W)]=0;
+# 	dark_bins=find(sum(W,1).==0);
+# 	N=size(W,1);
+# 	f_d=zeros(N);
+# 	tt_d=zeros(N);
 
-	for d=0:N-1
+# 	for d=0:N-1
 
-		cd=diag(W,d);
-		x=collect(1:N-d);
-		y=collect(1+d:N);
-		#d =1 means 1 vs 2, 2 vs 3.....
-		is_okx=zeros(size(x));
-		is_oky=zeros(size(y));
-		for k=1:length(x)
-			is_okx[k]=x[k] in dark_bins;
-			is_oky[k]=y[k] in dark_bins;			
-		end			
-		iz=find((1-is_okx).*(1-is_oky).>0);
-		f_d[d+1]=sum(cd[iz]);
-		tt_d[d+1]=length(iz);
-	end
+# 		cd=diag(W,d);
+# 		x=collect(1:N-d);
+# 		y=collect(1+d:N);
+# 		#d =1 means 1 vs 2, 2 vs 3.....
+# 		is_okx=zeros(size(x));
+# 		is_oky=zeros(size(y));
+# 		for k=1:length(x)
+# 			is_okx[k]=x[k] in dark_bins;
+# 			is_oky[k]=y[k] in dark_bins;			
+# 		end			
+# 		iz=find((1-is_okx).*(1-is_oky).>0);
+# 		f_d[d+1]=sum(cd[iz]);
+# 		tt_d[d+1]=length(iz);
+# 	end
 
-	expect_d=f_d./tt_d;
-	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
+# 	expect_d=f_d./tt_d;
 	
-	return f_d,tt_d;
+# 	return f_d,tt_d;
 
-end
+# end
 
 
 
-#a new fct for fitting expect_d. a general fct fitting everything may not work...
-#y=Kx^-gamma;
-function fit_expect_d(expect_d);
+# #a new fct for fitting expect_d. a general fct fitting everything may not work...
+# #y=Kx^-gamma;
+# function fit_expect_d(expect_d);
 
-	x=collect(1:length(expect_d));
+# 	x=collect(1:length(expect_d));
 
-	iz=find(expect_d.==0)[1];
-	x1=x[1:iz-1];
-	y1=expect_d[1:iz-1];
+# 	iz=find(expect_d.==0)[1];
+# 	x1=x[1:iz-1];
+# 	y1=expect_d[1:iz-1];
 
-	#x1=x[expect_d.>0];
-	#y1=expect_d[expect_d.>0];
-	#y[y.==0]=eps();
-	#fit=curve_fit(PowerFit,x,y);
-	tmp=linear_fit(log10(x1),log10(y1));#this line is the same as powerfit	
+# 	#x1=x[expect_d.>0];
+# 	#y1=expect_d[expect_d.>0];
+# 	#y[y.==0]=eps();
+# 	#fit=curve_fit(PowerFit,x,y);
+# 	tmp=linear_fit(log10(x1),log10(y1));#this line is the same as powerfit	
 
-	#we cannot do that..too large contribution from the leading points.
-	#tmp=linear_fit(log10(x_bin),log10(y_bin));
+# 	#we cannot do that..too large contribution from the leading points.
+# 	#tmp=linear_fit(log10(x_bin),log10(y_bin));
 	
-	gamma=tmp[2];
-	K=10^tmp[1];
-	return gamma, K;
+# 	gamma=tmp[2];
+# 	K=10^tmp[1];
+# 	return gamma, K;
 
-end
+# end
 
-function get_f_d_by_fitting(W,expect_d);
+# function get_f_d_by_fitting(W,expect_d);
 
-	N=size(W,1);
-	W[isnan(W)]=0;
-	dark_bins=find(sum(W,1).==0);
-	num_dark=length(dark_bins);
-	N_eff=N-num_dark;
-	f_W=zeros(size(W));#what's f_W? it's a generation of ones(size(W));
+# 	N=size(W,1);
+# 	W[isnan(W)]=0;
+# 	dark_bins=find(sum(W,1).==0);
+# 	num_dark=length(dark_bins);
+# 	N_eff=N-num_dark;
+# 	f_W=zeros(size(W));#what's f_W? it's a generation of ones(size(W));
 
-	x=collect(1:length(expect_d));
-	gamma,K=fit_expect_d(expect_d);
-	expect_d2=K*x.^gamma;
+# 	x=collect(1:length(expect_d));
+# 	gamma,K=fit_expect_d(expect_d);
+# 	expect_d2=K*x.^gamma;
 	
-	#this step is added for Ren's data..
-	#expect_d2[1]=expect_d[1];
-	#miss this thought..
+# 	#this step is added for Ren's data..
+# 	#expect_d2[1]=expect_d[1];
+# 	#miss this thought..
 
-	for d=0:N-1
-		f_W[1+d:N+1:end-d*N]=expect_d2[d+1];
-	end
-	tmp=f_W-diagm(diag(f_W));
-	f_W=f_W+tmp';
-	#sum(f_W[1,:])=1 here..
+# 	for d=0:N-1
+# 		f_W[1+d:N+1:end-d*N]=expect_d2[d+1];
+# 	end
+# 	tmp=f_W-diagm(diag(f_W));
+# 	f_W=f_W+tmp';
+# 	#sum(f_W[1,:])=1 here..
 
-	f_W[dark_bins,:]=0;
-	f_W[:,dark_bins]=0;
-	f_W=f_W/sum(f_W)*N_eff.^2;
+# 	f_W[dark_bins,:]=0;
+# 	f_W[:,dark_bins]=0;
+# 	f_W=f_W/sum(f_W)*N_eff.^2;
 
-	return f_W;
+# 	return f_W;
 
-end
+# end
 
 function get_null_polymer(W,f_W,err_threshold);
 
@@ -847,31 +847,7 @@ function extend_mat(Z,iz,L);
     return Z_extend;
 end
 
-#it look at the enrichment of contacts over a polymer model.
-#0 means no enrichment. value are -log10(P) based on a Poisson distribution.
-function get_P_value_observed_vs_expected(W,E_polymer);
-	all_P=ones(size(W));
-	iz=find(sum(W,2).>0);
-	for i=1:length(iz);
-		display(i);
-		for j=i:length(iz);
-			if E_polymer[iz[i],iz[j]].>0 && W[iz[i],iz[j]].>E_polymer[iz[i],iz[j]]
-				dd=Poisson(E_polymer[iz[i],iz[j]]);
-				lw=cdf(dd,floor(W[iz[i],iz[j]]));
-				uw=cdf(dd,ceil(W[iz[i],iz[j]]));
-				delta=W[iz[i],iz[j]]-floor(W[iz[i],iz[j]]);
-				cc=1-(lw+(uw-lw)*delta);
-				all_P[iz[i],iz[j]]=cc;
-				all_P[iz[j],iz[i]]=cc;
-			end
-		end
-	end
-	max_log_P=-floor(log10(minimum(all_P[all_P.>0])))+1;
-	enrich=-log10(all_P);
-	enrich[isinf(enrich)]=max_log_P;
-	
-	return enrich;
-end
+
 
 #for each bin, bin the replication timing data. This code iuse S1 and S4 to get a consensus domains..
 function get_replication_domains(u)
@@ -916,22 +892,6 @@ function get_timing_transition_regions_v2(x,outliner_thres,L,thres);
 
 end
 #the first bin is the boundary of CTR, with TTR-present. it's the more important one.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
