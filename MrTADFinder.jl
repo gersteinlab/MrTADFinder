@@ -1,188 +1,10 @@
-#using HDF5; 
 using JLD;
-#using MAT;
-#using Graphs;
 using DataFrames;
-#using Winston
 using CurveFit;
 using Distributions;
 using Interpolations;
 
 ###################################################################################
-
-# function read_WG_contact_map(input_file,N);
-
-# 	#table=readdlm(input_file,Int64);
-# 	table=readtable(input_file,separator='\t',header=false);
-# 	A=sparse(table[:x1],table[:x2],table[:x3],N,N);
-# 	tmp=A-spdiagm(diag(A));
-# 	A=A+tmp';
-	
-# 	return A;
-# end
-
-# function extract_chr(A,chr2bins,chr_num);
-# 	st=1+chr2bins[1,chr_num];
-# 	ed=1+chr2bins[2,chr_num];
-# 	A_chr=A[st:ed,st:ed];
-# 	return A_chr;
-# end
-
-# function get_expect_vs_d_v2(contacts,chr2bins,Nall);
-
-# 	f_dall=zeros(Nall);
-# 	tt_dall=zeros(Nall);
-
-# 	intra_sum=zeros(24);
-
-# 	contacts[isnan(contacts)]=0;
-
-# 	S=sum(contacts);
-
-# 	Neff=sum(sum(contacts,1).>0);
-
-# 	Neff_intra=zeros(24);
-
-# 	for chr_num=1:24
-
-# 		display(chr_num);
-	
-# 		W=extract_chr(contacts,chr2bins,chr_num);
-# 		W=full(W);
-# 		W[isnan(W)]=0;
-# 		dark_bins=find(sum(W,1).==0);
-# 		N=size(W,1);
-# 		f_d=zeros(N);
-# 		tt_d=zeros(N);
-
-# 		Neff_intra[chr_num]=N-length(dark_bins);
-# 		intra_sum[chr_num]=sum(W);
-
-# 		for d=0:N-1
-
-# 			cd=diag(W,d);
-# 			x=collect(1:N-d);
-# 			y=collect(1+d:N);
-# 			#d =1 means 1 vs 2, 2 vs 3.....
-# 			is_okx=zeros(size(x));
-# 			is_oky=zeros(size(y));
-# 			for k=1:length(x)
-# 				is_okx[k]=x[k] in dark_bins;
-# 				is_oky[k]=y[k] in dark_bins;			
-# 			end
-# 			iz=find((1-is_okx).*(1-is_oky).>0);
-# 			f_d[d+1]=sum(cd[iz]);
-# 			tt_d[d+1]=length(iz);
-# 		end
-
-# 		f_dall[1:length(f_d)]=f_dall[1:length(f_d)]+f_d;
-# 		tt_dall[1:length(f_d)]=tt_dall[1:length(f_d)]+tt_d;
-	
-
-# 	end
-
-
-# 	expect_d=f_dall./tt_dall;
-# 	#if we cf. this aggregated one with just chromosome 1, the number for d=a few are very consistent..
-# 	inter_sum=S-sum(intra_sum);
-
-# 	inter_chr_expect=inter_sum./(Neff^2-sum(Neff_intra.^2));
-
-
-# 	return expect_d,inter_chr_expect;
-
-# end
-
-# function get_expect_vs_d_single_chr(W,chr2bins);
-
-# 	W=full(W);
-# 	W[isnan(W)]=0;
-# 	dark_bins=find(sum(W,1).==0);
-# 	N=size(W,1);
-# 	f_d=zeros(N);
-# 	tt_d=zeros(N);
-
-# 	for d=0:N-1
-
-# 		cd=diag(W,d);
-# 		x=collect(1:N-d);
-# 		y=collect(1+d:N);
-# 		#d =1 means 1 vs 2, 2 vs 3.....
-# 		is_okx=zeros(size(x));
-# 		is_oky=zeros(size(y));
-# 		for k=1:length(x)
-# 			is_okx[k]=x[k] in dark_bins;
-# 			is_oky[k]=y[k] in dark_bins;			
-# 		end			
-# 		iz=find((1-is_okx).*(1-is_oky).>0);
-# 		f_d[d+1]=sum(cd[iz]);
-# 		tt_d[d+1]=length(iz);
-# 	end
-
-# 	expect_d=f_d./tt_d;
-	
-# 	return f_d,tt_d;
-
-# end
-
-
-
-# #a new fct for fitting expect_d. a general fct fitting everything may not work...
-# #y=Kx^-gamma;
-# function fit_expect_d(expect_d);
-
-# 	x=collect(1:length(expect_d));
-
-# 	iz=find(expect_d.==0)[1];
-# 	x1=x[1:iz-1];
-# 	y1=expect_d[1:iz-1];
-
-# 	#x1=x[expect_d.>0];
-# 	#y1=expect_d[expect_d.>0];
-# 	#y[y.==0]=eps();
-# 	#fit=curve_fit(PowerFit,x,y);
-# 	tmp=linear_fit(log10(x1),log10(y1));#this line is the same as powerfit	
-
-# 	#we cannot do that..too large contribution from the leading points.
-# 	#tmp=linear_fit(log10(x_bin),log10(y_bin));
-	
-# 	gamma=tmp[2];
-# 	K=10^tmp[1];
-# 	return gamma, K;
-
-# end
-
-# function get_f_d_by_fitting(W,expect_d);
-
-# 	N=size(W,1);
-# 	W[isnan(W)]=0;
-# 	dark_bins=find(sum(W,1).==0);
-# 	num_dark=length(dark_bins);
-# 	N_eff=N-num_dark;
-# 	f_W=zeros(size(W));#what's f_W? it's a generation of ones(size(W));
-
-# 	x=collect(1:length(expect_d));
-# 	gamma,K=fit_expect_d(expect_d);
-# 	expect_d2=K*x.^gamma;
-	
-# 	#this step is added for Ren's data..
-# 	#expect_d2[1]=expect_d[1];
-# 	#miss this thought..
-
-# 	for d=0:N-1
-# 		f_W[1+d:N+1:end-d*N]=expect_d2[d+1];
-# 	end
-# 	tmp=f_W-diagm(diag(f_W));
-# 	f_W=f_W+tmp';
-# 	#sum(f_W[1,:])=1 here..
-
-# 	f_W[dark_bins,:]=0;
-# 	f_W[:,dark_bins]=0;
-# 	f_W=f_W/sum(f_W)*N_eff.^2;
-
-# 	return f_W;
-
-# end
 
 function get_null_polymer(W,f_W,err_threshold);
 
@@ -231,7 +53,146 @@ function get_null_polymer(W,f_W,err_threshold);
 	return coverage_est_new,E_W;
 end
 
+#this fct is the same as the one in HiC-spector
+function get_expect_vs_d_single_chr_v0(W,chr2bins,bin_size);
 
+	W=full(W);
+	W[isnan(W)]=0;
+	
+	N=size(W,1);
+	
+
+	(u,v,w)=findnz(triu(W));
+	d=float(v-u);
+	d2=float(d);
+	d2[d2.==0]=1/3;#this is the average distance for 2 points drawn from an uniform distribution between [0.1];
+	d3=d2*bin_size;
+
+	#model = loess(log10(d3),log10(w),span=0.01);
+	#the loess fct is rather slow, and fail to work at some matrices (not sure why), we have replaced it by a simpler method
+
+	x=log10(d3);
+	y=log10(w);
+
+	xs,ys_smooth=local_smoothing(x,y);
+
+	xs_all=collect(0:1.0:size(W,1)-1);xs_all[1]=1/3;
+	xs_all=xs_all*bin_size;
+	xs_all_aux=log10(xs_all);
+
+	ys_all=zeros(size(xs_all));
+	for k=1:length(xs_all_aux);
+		ik=find(xs.==xs_all_aux[k]);
+		if ~isempty(ik)
+			ys_all[k]=ys_smooth[ik][1];
+		end
+	end	
+
+	A_x=find(ys_all.>0);
+	knots=(A_x,);
+	itp=interpolate(knots,ys_smooth, Gridded(Linear()));
+
+	A_nz=find(ys_all.==0);
+	for i=1:length(A_nz);
+		ys_all[A_nz[i]]=itp[A_nz[i]];
+	end
+
+	expect=10.^ys_all;
+
+	return xs_all, expect;
+
+end
+
+#this fct is the same as the one in HiC-spector
+function get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
+
+	#to find distance dependence, we should NOT iced the chr one by one.
+	#because in genome-wide scale dependance, we should keep the contacts in same base
+
+	all_d2=Float64[];
+	all_w=Float64[];
+	Ltmp=zeros(23);
+	for chr_num=1:23
+	
+		#display(chr_num);
+		W=extract_chr(contact,chr2bins,chr_num);
+		W=full(W);
+		W[isnan(W)]=0;
+
+		N=size(W,1);
+		
+		(u,v,w)=findnz(triu(W));
+		
+		d=float(v-u);
+		d2=float(d);
+		d2[d2.==0]=1/3;#this is the average distance for 2 points drawn from an uniform distribution between [0.1];
+		
+		all_d2=[all_d2;d2];
+		all_w=[all_w;w];
+		Ltmp[chr_num]=size(W,1);
+	
+	end
+
+	all_d3=all_d2*bin_size;
+
+	x=log10(all_d3);
+	y=log10(all_w);
+
+	xs,ys_smooth=local_smoothing(x,y);
+
+	xs_all=collect(0:1.0:maximum(Ltmp)-1);xs_all[1]=1/3;
+	xs_all=xs_all*bin_size;
+	xs_all_aux=log10(xs_all);
+
+	ys_all=zeros(size(xs_all));
+	for k=1:length(xs_all_aux);
+		ik=find(xs.==xs_all_aux[k]);
+		if ~isempty(ik)
+			ys_all[k]=ys_smooth[ik][1];
+		end
+	end	
+
+	A_x=find(ys_all.>0);
+	knots=(A_x,);
+	itp=interpolate(knots,ys_smooth, Gridded(Linear()));
+
+	A_nz=find(ys_all.==0);
+	for i=1:length(A_nz);
+		ys_all[A_nz[i]]=itp[A_nz[i]];
+	end
+
+	expect=10.^ys_all;
+
+	return xs_all, expect;
+
+end
+
+#this fct is the same as the one in HiC-spector
+function get_f_W(W,ys);
+
+	N=size(W,1);
+	W[isnan(W)]=0;
+	dark_bins=find(sum(W,1).==0);
+	num_dark=length(dark_bins);
+	N_eff=N-num_dark;
+	f_W=zeros(size(W));#what's f_W? it's a generation of ones(size(W));
+
+	x=collect(1:N);
+
+	for d=0:N-1
+		f_W[1+d:N+1:end-d*N]=ys[d+1];
+	end
+	tmp=f_W-diagm(diag(f_W));
+	f_W=f_W+tmp';
+	#sum(f_W[1,:])=1 here..
+
+	f_W[dark_bins,:]=0;
+	f_W[:,dark_bins]=0;
+	f_W=f_W/sum(f_W)*N_eff.^2;
+
+	return f_W;
+
+end
 
 ###################################################################################
 #this following code is the basic TAD calling code
@@ -476,6 +437,7 @@ end
 
 
 #id is the starting loc of a chunk, and d is the length it spans..
+#this code is used in HiC-spector
 function get_chunks_v2(a,singleton=0);
 	# adopt from a matlab code by Jiro Doke;
 	 a                 = [NaN; a; NaN];
@@ -547,19 +509,12 @@ function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
 end
 
 function generate_TADs_output(TADs_list,out_file);
-
 	writetable(out_file, TADs_list);
-	#X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
-	#writedlm(out_file,X);
-
 end
 
 function generate_TADs_bed(TADs_list,out_file);
-
-	#writetable(out_file, TADs_list);
 	X=[TADs_list[:chr] TADs_list[:domain_st] TADs_list[:domain_ed]];
 	writedlm(out_file,X);
-
 end
 
 ###################################################################################
@@ -653,106 +608,6 @@ end
 ##############################################################################
 #a few useful codes for downstream analysis
 
-#we assume a folder TADs_loc that store the jld output of all chr
-function concatenate_TADs_diff_chr(TADs_loc,TADs_file_prefix);
-	
-	max_TAD=0;
-	all_TADs=[];
-	for chr_num=1:24
-		display(chr_num);
-		TADs_file=TADs_loc*TADs_file_prefix*"_"*change_chr(chr_num)*".jld";
-		d=load(TADs_file);
-		TADs=d["TADs"];
-		TADs[TADs.>0]=TADs[TADs.>0]+max_TAD;
-		all_TADs=[all_TADs;TADs];
-		max_TAD=maximum(TADs);
-	end
-	all_TADs=[all_TADs;0];
-
-	return all_TADs;
-	#this is the genome-wide bin to TAD map..
-end
-
-#the bed file has only chr num, st pos and end pos..
-function read_TADs_bed(input_file,bin2loc,chr2bins,chr_num)
-	all_Ren_TADs=readtable(input_file,header=false,separator='\t');
-	#info=matread("/gpfs/scratch/fas/gerstein/ky26/Hi-C_processed/hg18_bin_info.mat");
-	#chr2bins=int(info["chr2bins"]);
-	#bin2loc=info["bin2loc"];
-	chr=change_chr(chr_num);
-	i_ren=find(all_Ren_TADs[:1].==chr);
-	Ren_TADs_chr=all_Ren_TADs[i_ren,:];
-	if chr_num.>1
-		tmp=chr2bins[2,chr_num-1]+1;#tmp+1 correct the problem in previous round..
-	else 
-		tmp=1;
-	end
-
-	Ren_TADs_chr[:x4]=tmp+round(Int64,floor(Ren_TADs_chr[:x2]/40000)+1);
-	Ren_TADs_chr[:x5]=tmp+round(Int64,floor(Ren_TADs_chr[:x3]/40000)+1);
-	Ren_TADs_chr[:x6]=collect(1:size(Ren_TADs_chr,1));
-	rename!(Ren_TADs_chr,:x1,:chr)
-	rename!(Ren_TADs_chr,:x4,:domain_st_bin)
-	rename!(Ren_TADs_chr,:x5,:domain_ed_bin)
-	rename!(Ren_TADs_chr,:x6,:idx);
-	rename!(Ren_TADs_chr,:x2,:domain_st)
-	rename!(Ren_TADs_chr,:x3,:domain_ed)
-	return Ren_TADs_chr;
-end
-
-#for unassigned bins, like dark ones, bins2modules will be zeros
-function TADs_list_to_bins(TADs_list,chr2bins);
-    
-    chr_num=change_chr(TADs_list[:chr][1]);
-    stc=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
-    edc=chr2bins[:,chr_num][2]+1;#we here shift it..
-    bins2modules=zeros(Int,edc-stc+1,1);
-    size_chr=length(bins2modules);
-
-    chr2all_bin=collect(stc:edc);
-    #this will be the array mapped by elements in the chr of interest.
-
-    for i=1:size(TADs_list,1);
-        stm=find(chr2all_bin.==TADs_list[i,4])[1];
-        edm=find(chr2all_bin.==TADs_list[i,5])[1];
-        bins2modules[stm:edm]=TADs_list[i,6];
-    end
-
-    return bins2modules;
-
-end
-
-function get_bdd_loc(is_bdd,chr_num,bin2loc)
-
-	bin_size=bin2loc[3,1]-bin2loc[2,1]+1;
-	i_bdd=find(is_bdd);
-	i_pick=find(bin2loc[1,:].==chr_num-1);
-	st=bin2loc[2,i_pick];
-	ed=bin2loc[3,i_pick];
-	bdd_loc=[st ed[end]];
-	bdd_loc_array=zeros(Int,bdd_loc[end]);
-	L=ed[end];
-	bdd_loc=bdd_loc[i_bdd];
-	for j=1:length(bdd_loc);
-		iz=collect(bdd_loc[j]-Int(bin_size/2):1:bdd_loc[j]+Int(bin_size/2));
-		iz=iz[(iz.>0).*(iz.<=L)];
-		bdd_loc_array[iz]=1;
-	end
-	
-	return bdd_loc,bdd_loc_array;
-end
-
-#use this code for boundary, which is defined by 2 bins...
-#the first and last bdd therefor should not fit..
-function get_local_interaction_strength(bdd,W,win_size);
-	ib=collect(bdd[1]-1:bdd[1]);
-	ia=collect(bdd[2]:bdd[2]+1);
-	ia=ia[ia.>win_size-1];
-	ib=ib[ib.<size(W,1)-win_size]+1;
-	int_strength=(sum(W[ib,ib])+sum(W[ia,ia]))/(sum(W[ib,ia])+sum(W[ia,ib]));
-	return int_strength;
-end
-
 function MI_two_partitions(a1,a2);
 
 	iz=find(a1+a2.>0);
@@ -820,79 +675,47 @@ function swap_boundaries(is_bdd);
 	return is_bdd_r;
 end
 
-#bins2modules is a genome-wide bin to TAD map.
-function show_mat(bins2modules);
+###############################################################
+
+#for unassigned bins, like dark ones, bins2modules will be zeros
+function TADs_list_to_bins(TADs_list,chr2bins);
     
-    L=length(bins2modules);
-    iz=find(bins2modules.>0);
-    s2=bins2modules[iz];
-   
-    Z=(broadcast(-,s2,s2').==0)+0;
-    
-    allTADs=extend_mat(Z,iz,L);
-    #imagesc(Z)
+    chr_num=change_chr(TADs_list[:chr][1]);
+    stc=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
+    edc=chr2bins[:,chr_num][2]+1;#we here shift it..
+    bins2modules=zeros(Int,edc-stc+1,1);
+    size_chr=length(bins2modules);
 
-    return allTADs;
+    chr2all_bin=collect(stc:edc);
+    #this will be the array mapped by elements in the chr of interest.
+
+    for i=1:size(TADs_list,1);
+        stm=find(chr2all_bin.==TADs_list[i,4])[1];
+        edm=find(chr2all_bin.==TADs_list[i,5])[1];
+        bins2modules[stm:edm]=TADs_list[i,6];
+    end
+
+    return bins2modules;
 
 end
 
-function extend_mat(Z,iz,L);
-    (u,v)=ind2sub(size(Z),find(Z.!=0));
-    w=Z[find(Z)];
-    #w=nonzeros(Z);
-    u=iz[u];
-    v=iz[v];
-    Z_extend=sparse(u,v,w,L,L);
-    Z_extend=full(Z_extend);
-    return Z_extend;
-end
+function get_bdd_loc(is_bdd,chr_num,bin2loc)
 
-
-
-#for each bin, bin the replication timing data. This code iuse S1 and S4 to get a consensus domains..
-function get_replication_domains(u)
-	N=length(u);
-	(loc,span)=get_chunks_v2(u.>5);
-	repli_domains=zeros(Int,N);
-	n=1;
-	for i=1:length(loc);
-		repli_domains[loc[i]:loc[i]+span[i]-1]=n;
-		n=n+1;
+	bin_size=bin2loc[3,1]-bin2loc[2,1]+1;
+	i_bdd=find(is_bdd);
+	i_pick=find(bin2loc[1,:].==chr_num-1);
+	st=bin2loc[2,i_pick];
+	ed=bin2loc[3,i_pick];
+	bdd_loc=[st ed[end]];
+	bdd_loc_array=zeros(Int,bdd_loc[end]);
+	L=ed[end];
+	bdd_loc=bdd_loc[i_bdd];
+	for j=1:length(bdd_loc);
+		iz=collect(bdd_loc[j]-Int(bin_size/2):1:bdd_loc[j]+Int(bin_size/2));
+		iz=iz[(iz.>0).*(iz.<=L)];
+		bdd_loc_array[iz]=1;
 	end
-	return repli_domains;
+	
+	return bdd_loc,bdd_loc_array;
 end
-
-#x is the repli-seq binned data, 40kb, 
-function get_timing_transition_regions_v2(x,outliner_thres,L,thres);
-	#L=10;
-	#thres=.95;
-	x[x.>median(x)*outliner_thres]=median(x)*outliner_thres;
-	b=linspace(1,median(x)*outliner_thres,L);
-	b=flipdim(b,1);
-	r=zeros(size(x));
-	for i=1:length(x)-L+1
-    	r[i]=cor(x[i:i+L-1],b);
-	end
-	a=sign(diff(r));
-	iz=find((a[1:end-1].>0).*(a[2:end].<0));
-	iz=iz[r[iz+1].>thres];
-	TTR=[iz iz+L-1];
-
-	b2=flipdim(b,1);
-	r2=zeros(size(x));
-	for i=1:length(x)-L+1
-    	r2[i]=cor(x[i:i+L-1],b2);
-	end
-	a2=sign(diff(r2));
-	iz2=find((a2[1:end-1].>0).*(a2[2:end].<0));
-	iz2=iz2[r2[iz2+1].>thres];
-	TTR2=[iz2 iz2+L-1];
-
-	return TTR,TTR2;
-
-end
-#the first bin is the boundary of CTR, with TTR-present. it's the more important one.
-
-
-
 
