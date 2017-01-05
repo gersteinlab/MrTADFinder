@@ -5,6 +5,28 @@ using Distributions;
 using Interpolations;
 
 ###################################################################################
+function read_generic_WG_contact_map(map_file,N);
+	
+	map=readdlm(map_file);
+	I=map[:,1];
+	I=round(Int64,I);
+	J=map[:,2];
+	J=round(Int64,J);
+	K=map[:,3];
+	W=sparse(I,J,K,N,N);
+	W=full(W);
+
+	return W;
+end
+
+##redundant function in HiC_spector..
+function extract_chr(A,chr2bins,chr_num);
+	st=1+chr2bins[1,chr_num];
+	ed=1+chr2bins[2,chr_num];
+	A_chr=A[st:ed,st:ed];
+	return A_chr;
+end
+
 
 function get_null_polymer(W,f_W,err_threshold);
 
@@ -90,7 +112,8 @@ function get_expect_vs_d_single_chr_v0(W,chr2bins,bin_size);
 
 	A_x=find(ys_all.>0);
 	knots=(A_x,);
-	itp=interpolate(knots,ys_smooth, Gridded(Linear()));
+	itp=interpolate(knots,ys_smooth,Gridded(Linear()));
+	#itp=interpolate(knots,ys_smooth[ys_all.>0], Gridded(Linear()));
 
 	A_nz=find(ys_all.==0);
 	for i=1:length(A_nz);
@@ -361,9 +384,10 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
             		spin_b=sigma[x-1];
             	end
             	c=Bcompact[x,:];
-           		c[x]=0;#this is important step to make sure the deltaQ is right 
+           		c[x]=0;#this is important step to make sure the deltaQ is right ;
+
             	neighbors_spin=sigma;
-            	DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],vec(c)));
+            	DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],squeeze(c',2)));
             	#the 2nd term sum over the components from each community in advance
             	#1st term, the effect of getting rid of the original spin contribution..
             	#note the dim of DeltaQ is the number of communities

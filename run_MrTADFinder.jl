@@ -40,17 +40,25 @@ bin2loc=readdlm(bins_file2,Int64)';
 N=chr2bins[2,end]+1;
 Nall=maximum(chr2bins[2,:]-chr2bins[1,:])+1;
 
+bin_size=bin2loc[3,2]-bin2loc[3,1];
+
 #load contact map
-contacts=read_WG_contact_map(map_file,N);
+contacts=read_generic_WG_contact_map(map_file,N);
+
 W=extract_chr(contacts,chr2bins,pick_chr);
+W=full(W);
 #use the next line to save the contact map in JLD format
 #save("./all_contacts.jld","interaction",W);
 
-#genome-wide expectation
-expect_d,inter_chr_expect=get_expect_vs_d_v2(contacts,chr2bins,Nall);
+#
+#use this part if you want expect based on a genome-wide expectation
+#xs_all,expect_d=get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
+
+#expect based on single chr
+xs_all,expect_d=get_expect_vs_d_single_chr_v0(W,chr2bins,bin_size);
 
 #null model
-f_W=get_f_d_by_fitting(W,expect_d);
+f_W=get_f_W(W,expect_d);
 c_est,E_W=get_null_polymer(W,f_W,err);
 
 #TAD calling
