@@ -90,7 +90,7 @@ The bins defined by the annotation files are provided in the 4th and 5th columns
 
 MrTADFinder is written in Julia. It has been tested in Julia v0.4.3. If Julia and the required packages are installed (see the first few lines in MrTADFinder.jl), one could simply run in the command prompt
 
-> julia run_MrTADFinder.jl contact_map ./data/bins_file1 ./data/bins_file2 res=2.5 10 TAD_chr10.bed
+> julia run_MrTADFinder.jl contact_map ./data/bins_file1 ./data/bins_file2 res=1.0 10 TAD_chr10.bed
 
 The 1st agrument: contact map.  
 The 2nd and 3rd agruments are the 2 annotation files.  
