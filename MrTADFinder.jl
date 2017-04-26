@@ -14,16 +14,17 @@ function read_generic_WG_contact_map(map_file,N);
 	J=round(Int64,J);
 	K=map[:,3];
 	W=sparse(I,J,K,N,N);
-	W=full(W);
 
 	return W;
 end
 
 ##redundant function in HiC_spector..
 function extract_chr(A,chr2bins,chr_num);
+
 	st=1+chr2bins[1,chr_num];
 	ed=1+chr2bins[2,chr_num];
 	A_chr=A[st:ed,st:ed];
+	
 	return A_chr;
 end
 
@@ -57,7 +58,7 @@ function get_null_polymer(W,f_W,err_threshold);
 	err=sum(abs(coverage_est_new-coverage_est));
 
 	while err>err_threshold;
-		display(err);
+		println(err);
 		coverage_est=coverage_est_new+0;
 		iy=coverage_est;
 		tmp=f_W*iy;
@@ -217,6 +218,47 @@ function get_f_W(W,ys);
 
 end
 
+#this fct is the same as the one in HiC-spector
+function local_smoothing(x,y);
+
+    span=0.01;
+    v=sortperm(x);
+    x=x[v];
+    y=y[v];
+    ux=unique(x);
+    uy_smooth=zeros(size(ux));
+    n=Int(floor(length(x)*span/2));
+
+    mm=zeros(size(x));
+    L=2*n+1;
+    i=n+1;
+    st=1;
+    ed=i+n;
+    mm[i]=mean(y[st:ed]);
+    for i=n+2:length(y)-n;
+        #display(i);
+        ed=ed+1;
+        mm[i]=mm[i-1]+y[ed]/L-y[st]/L;
+        st=st+1;
+    end
+    for i=1:n
+        mm[i]=mean(y[1:n+i]);
+    end
+    for i=1:n;
+        mm[end-n+i]=mean(y[end-n+1-n+i:end]);
+    end
+
+    for i=1:length(ux);
+        iz=find(x.==ux[i]);
+        uy_smooth[i]=mean(mm[iz]);
+    end
+
+    return ux,uy_smooth;
+
+end
+
+
+
 ###################################################################################
 #this following code is the basic TAD calling code
 function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut);
@@ -225,7 +267,7 @@ function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut)
 	all_bdd_rec=zeros(Int,size(W,1)+1,num_trial);
 	all_final_assign=zeros(Int,size(W,1),num_trial);
 	for x=1:num_trial;
-		display(x);
+		println(x);
 		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
 		all_final_assign[:,x]=final_assign_x;
 		for cc=1:maximum(final_assign_x);
@@ -388,6 +430,7 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
 
             	neighbors_spin=sigma;
             	DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],squeeze(c',2)));
+                #DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],c));
             	#the 2nd term sum over the components from each community in advance
             	#1st term, the effect of getting rid of the original spin contribution..
             	#note the dim of DeltaQ is the number of communities
@@ -592,6 +635,7 @@ function get_optimal_partition(W,E_W,res);
 		partition_len=partition_ed-partition_st+1;
 		#pt=traceback_aux[partition_st,partition_ed][1];
 		pt=traceback_aux[partition_st,partition_ed];
+        pt=convert(Int64,pt);
 		if pt.==partition_len
 			push!(final_partition,partition);
 			shift!(active_partition);
@@ -667,6 +711,7 @@ end
 
 function swap_TADs(b2m);
 	u,v=get_chunks_v2(b2m,1);
+    v=convert(Array{Int64,1},v);
 	r=randperm(length(u));
 	b2m_r=zeros(size(b2m));
 	count_pos=1;
@@ -730,7 +775,7 @@ function get_bdd_loc(is_bdd,chr_num,bin2loc)
 	i_pick=find(bin2loc[1,:].==chr_num-1);
 	st=bin2loc[2,i_pick];
 	ed=bin2loc[3,i_pick];
-	bdd_loc=[st ed[end]];
+	bdd_loc=[st' ed[end]]';
 	bdd_loc_array=zeros(Int,bdd_loc[end]);
 	L=ed[end];
 	bdd_loc=bdd_loc[i_bdd];
