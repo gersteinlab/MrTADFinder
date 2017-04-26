@@ -98,6 +98,9 @@ The 4th argument is the resolution parameter.
 The 5th argument is the chromosome of interest.  
 The 6th argument is the path and name of the TAD output file. An additional file of boundary score will be generated.
 
+<h3>Aurthor/Support</h3>
+Koon-Kiu Yan, koonkiu.yan@gmail.com; Mark Gerstein, mark@gersteinlab.org
+
 <h3>REFERENCE:</h3>
 Koon-Kiu Yan, Mark Gerstein: MrTADFinder: A network modularity based approach to identify topologically associating domains in multiple resolutions
 http://biorxiv.org/content/early/2016/12/29/097345
