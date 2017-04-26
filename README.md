@@ -1,7 +1,8 @@
 # MrTADFinder
 MrTADFinder aims to identify topologically associating domains (TADs) in multiple resolutions.
 
-##INPUT FILES:
+
+<h3>INPUT FILES:</h3> 
 
 MrTADFinder takes an whole-genome-to-whole genome contact map as an input. The contact map should be a sparse matrix stored in a tab-delimited file as follow
 
@@ -68,7 +69,7 @@ IN this case, there are 77404 lines, representing all genomic bins (chromosome n
 
 Annotation files based on binning human genome (hg19) in 40kb are provided. Users can use different annotation files for different bin sizes or different organisms.
 
-##OUTPUT FILE:
+<h3>OUTPUT FILES:</h3> 
 
 Output file is simply a csv file that stores a list of TADs (chromosome number, start and end coordinates).
 
@@ -85,7 +86,7 @@ Output file is simply a csv file that stores a list of TADs (chromosome number, 
 
 The bins defined by the annotation files are provided in the 4th and 5th columns.
 
-##USAGE:
+<h3>USAGE:</h3>
 
 MrTADFinder is written in Julia. It has been tested in Julia v0.4.3. If Julia and the required packages are installed (see the first few lines in MrTADFinder.jl), one could simply run in the command prompt
 
@@ -95,10 +96,10 @@ The 1st agrument: contact map.
 The 2nd and 3rd agruments are the 2 annotation files.  
 The 4th argument is the resolution parameter.  
 The 5th argument is the chromosome of interest.  
-The 6th argument is the path and name of the output file.
+The 6th argument is the path and name of the TAD output file. An additional file of boundary score will be generated.
 
-
-##REFERENCE:
-
+<h3>REFERENCE:</h3>
+Koon-Kiu Yan, Mark Gerstein: MrTADFinder: A network modularity based approach to identify topologically associating domains in multiple resolutions
+http://biorxiv.org/content/early/2016/12/29/097345
 
 
