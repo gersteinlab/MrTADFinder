@@ -111,7 +111,7 @@ function get_expect_vs_d_single_chr_v0(W,chr2bins,bin_size);
 		end
 	end	
 
-	A_x=find(ys_all.>0);
+	A_x=find(ys_all.!=0);
 	knots=(A_x,);
 	itp=interpolate(knots,ys_smooth,Gridded(Linear()));
 	#itp=interpolate(knots,ys_smooth[ys_all.>0], Gridded(Linear()));
@@ -176,7 +176,7 @@ function get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
 		end
 	end	
 
-	A_x=find(ys_all.>0);
+	A_x=find(ys_all.!=0);
 	knots=(A_x,);
 	itp=interpolate(knots,ys_smooth, Gridded(Linear()));
 
