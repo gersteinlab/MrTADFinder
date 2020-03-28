@@ -1,7 +1,12 @@
-include("/home/fas/gerstein/ky26/Github/MrTADFinder/MrTADFinder.jl");
+using DelimitedFiles
+using LinearAlgebra;
+using SparseArrays;
+
+include("MrTADFinder.jl");
 
 paras=[];
 for x in ARGS;
+	global paras
 	paras=vcat(paras,x);
 end
 
@@ -15,12 +20,12 @@ bins_file2=paras[3];
 
 #user defined resolution parameter
 res_str=paras[4];
-p=search(res_str,"=")[end];
+p=findfirst(isequal('='),res_str);
 res=parse(Float64,res_str[p+1:end])
 
 #chromosome 
 pick_chr=paras[5];
-pick_chr=parse(Float64,pick_chr);
+pick_chr=parse(Int64,pick_chr);
 
 #loc of output file
 out_file=paras[6];
@@ -39,8 +44,9 @@ chr2bins=chr2bins';
 chr_num=bins_info[:,1];
 chr_str=bins_info[:,2];
 bin2loc=readdlm(bins_file2,Int64)';
-N=chr2bins[2,end]+1;
-Nall=maximum(chr2bins[2,:]-chr2bins[1,:])+1;
+N=chr2bins[2,pick_chr]+1;   # changed to chromosome specific 'N'
+#N=chr2bins[2,end]+1;
+#Nall=maximum(chr2bins[2,:]-chr2bins[1,:])+1;
 
 bin_size=bin2loc[3,2]-bin2loc[3,1];
 
@@ -49,13 +55,12 @@ println("reading contact map");
 contacts=read_generic_WG_contact_map(map_file,N);
 
 W=extract_chr(contacts,chr2bins,pick_chr);
-W2=W-diagm(diag(W));
+W2=W-diagm(0 => diag(W));
 W=W2'+W;
-W=full(W);
+W=Matrix(W);#full(W);
 #use the next line to save the contact map in JLD format
 #save("./all_contacts.jld","interaction",W);
 
-#
 #use this part if you want expect based on a genome-wide expectation
 #xs_all,expect_d=get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
 
@@ -77,13 +82,3 @@ TADs_list=report_domains(chr2bins,bin2loc,pick_chr,TADs_final);
 generate_TADs_bed(TADs_list,out_file);
 
 writedlm(out_file2,bdd_prob_score);
-
-
-
-
-
-
-
-
-
-

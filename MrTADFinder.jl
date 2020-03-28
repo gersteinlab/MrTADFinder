@@ -1,17 +1,20 @@
-using JLD;
-using DataFrames;
 using CurveFit;
+using DataFrames;
 using Distributions;
 using Interpolations;
+using JLD;
+using Printf;
+using Random;
+using SparseArrays;
 
 ###################################################################################
 function read_generic_WG_contact_map(map_file,N);
 	
 	map=readdlm(map_file);
-	I=map[:,1];
-	I=round(Int64,I);
+    I=map[:,1];
+	I=round.(Int64,I);
 	J=map[:,2];
-	J=round(Int64,J);
+	J=round.(Int64,J);
 	K=map[:,3];
 	W=sparse(I,J,K,N,N);
 
@@ -31,44 +34,47 @@ end
 
 function get_null_polymer(W,f_W,err_threshold);
 
-	W[isnan(W)]=0;
-	dark_bins=find(sum(W,1).==0);
+	W[isnan.(W)] .= 0;
+	dark_bins=findall(sum(W,dims=1).==0);
 
-	coverage_real=sum(W,2);
-	invC=1./coverage_real;
+	coverage_real=sum(W,dims=2);
+	invC=1 ./ coverage_real;
 	invC=invC[:,1];
-	invC[isinf(invC)]=0;
-	invC=diagm(invC);
+	invC[isinf.(invC)] .= 0;
+	invC=Matrix(Diagonal(invC));
 
 
-	coverage_est=sum(W,2)/sqrt(sum(W));#sum(W) is 2N
-	coverage_est[dark_bins]=0;
+	coverage_est=sum(W,dims=2)/sqrt(sum(W));#sum(W) is 2N
+    for i in dark_bins
+        coverage_est[i[2]] = 0
+    end
+    #coverage_est[dark_bins] .= 0;
 
-	#y=1./coverage_est;
+	#y=1 ./ coverage_est;
 	iy=coverage_est;
 	
 	tmp=f_W*iy;
 	y_new=invC*tmp;
-	coverage_est_new=1./y_new;
-	coverage_est_new[isinf(coverage_est_new)]=0;
+	coverage_est_new=1 ./ y_new;
+	coverage_est_new[isinf.(coverage_est_new)] .= 0;
 	#coverage_est_new=coverage_est_new/sum(coverage_est_new)*sqrt(sum(W)); this is not the right normalization..
 	nm=sum((coverage_est_new*coverage_est_new').*f_W);
 	coverage_est_new=coverage_est_new/sqrt(nm)*sqrt(sum(W));
 
-	err=sum(abs(coverage_est_new-coverage_est));
+	err=sum(abs.(coverage_est_new-coverage_est));
 
 	while err>err_threshold;
 		println(err);
-		coverage_est=coverage_est_new+0;
+		coverage_est=coverage_est_new .+ 0;
 		iy=coverage_est;
 		tmp=f_W*iy;
 		y_new=invC*tmp;
-		coverage_est_new=1./y_new;
-		coverage_est_new[isinf(coverage_est_new)]=0;
+		coverage_est_new=1 ./ y_new;
+		coverage_est_new[isinf.(coverage_est_new)] .= 0;
 		nm=sum((coverage_est_new*coverage_est_new').*f_W);
 		coverage_est_new=coverage_est_new/sqrt(nm)*sqrt(sum(W));
 		#coverage_est_new=coverage_est_new/sum(coverage_est_new)*sqrt(sum(W));
-		err=sum(abs(coverage_est_new-coverage_est));
+		err=sum(abs.(coverage_est_new-coverage_est));
 	end
 
 	E_W=(coverage_est_new*coverage_est_new').*f_W;
@@ -79,52 +85,68 @@ end
 #this fct is the same as the one in HiC-spector
 function get_expect_vs_d_single_chr_v0(W,chr2bins,bin_size);
 
-	W=full(W);
-	W[isnan(W)]=0;
+	W=Matrix(W);#full(W);
+	W[isnan.(W)] .= 0;
 	
 	N=size(W,1);
-	
 
-	(u,v,w)=findnz(triu(W));
+	#(u,v,w)=findnz(triu(W));
+	II = findall(!iszero, triu(W));
+	(u,v,w) = getindex.(II, 1), getindex.(II, 2), triu(W)[II];
 	d=float(v-u);
 	d2=float(d);
-	d2[d2.==0]=1/3;#this is the average distance for 2 points drawn from an uniform distribution between [0.1];
+	d2[d2.==0] .= 1/3;#this is the average distance for 2 points drawn from an uniform distribution between [0.1];
 	d3=d2*bin_size;
 
 	#model = loess(log10(d3),log10(w),span=0.01);
 	#the loess fct is rather slow, and fail to work at some matrices (not sure why), we have replaced it by a simpler method
-
-	x=log10(d3);
-	y=log10(w);
-
+	x=log10.(d3);
+	y=log10.(w);
+    
 	xs,ys_smooth=local_smoothing(x,y);
-
-	xs_all=collect(0:1.0:size(W,1)-1);xs_all[1]=1/3;
+	#output of local_smoothing have no zero at the end..
+	#ususally the smooth fct cannot return the same dim as W..leading to the following issue..
+	#that's because we cannot find bins with contact but are separated by the whole chr..
+	#this is something I prob. missed, I guess in the previous version, I got no complaint..
+	#what's here is prob the same as what I had. but setting the last few terms as 0 may not be the most reasonable.
+	#it should be set as the last non zero number in the array.. 
+    
+	xs_all=collect(0:1.0:size(W,1)-1);
+    xs_all[1]=1/3;
 	xs_all=xs_all*bin_size;
-	xs_all_aux=log10(xs_all);
+	xs_all_aux=log10.(xs_all);
 
 	ys_all=zeros(size(xs_all));
 	for k=1:length(xs_all_aux);
-		ik=find(xs.==xs_all_aux[k]);
+		ik=findall(xs.==xs_all_aux[k]);
 		if ~isempty(ik)
 			ys_all[k]=ys_smooth[ik][1];
 		end
-	end	
+	end
 
-	A_x=find(ys_all.!=0);
+    
+	A_x=findall(ys_all.!=0);
 	knots=(A_x,);
 	itp=interpolate(knots,ys_smooth,Gridded(Linear()));
 	#itp=interpolate(knots,ys_smooth[ys_all.>0], Gridded(Linear()));
-
-	A_nz=find(ys_all.==0);
-	for i=1:length(A_nz);
-		ys_all[A_nz[i]]=itp[A_nz[i]];
+    
+	A_nz=findall(ys_all.==0);
+    for i=1:length(A_nz);
+        try
+            ys_all[A_nz[i]]=itp[A_nz[i]];
+        catch e
+            if e isa BoundsError
+                continue
+            else
+                println("Error encountered as a result of local_smoothing (see lines 101-136): $e")
+                exit(-2)
+            end
+        end 
 	end
-
-	expect=10.^ys_all;
-
+	expect=10 .^ ys_all;
+    
 	return xs_all, expect;
-
+    
 end
 
 #this fct is the same as the one in HiC-spector
@@ -140,12 +162,14 @@ function get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
 	
 		#display(chr_num);
 		W=extract_chr(contact,chr2bins,chr_num);
-		W=full(W);
-		W[isnan(W)]=0;
+		W=Matrix(W);#full(W);
+		W[isnan.(W)]=0;
 
 		N=size(W,1);
 		
-		(u,v,w)=findnz(triu(W));
+		#(u,v,w)=findnz(triu(W));
+		I = findall(!iszero, triu(W))
+		(u,v,w) = getindex.(I, 1), getindex.(I, 2), triu(W)[I]
 		
 		d=float(v-u);
 		d2=float(d);
@@ -159,33 +183,34 @@ function get_expect_vs_d_WG_v0(contact,chr2bins,bin_size);
 
 	all_d3=all_d2*bin_size;
 
-	x=log10(all_d3);
-	y=log10(all_w);
+	x=log10.(all_d3);
+	y=log10.(all_w);
 
 	xs,ys_smooth=local_smoothing(x,y);
 
+#
 	xs_all=collect(0:1.0:maximum(Ltmp)-1);xs_all[1]=1/3;
 	xs_all=xs_all*bin_size;
-	xs_all_aux=log10(xs_all);
+	xs_all_aux=log10.(xs_all);
 
 	ys_all=zeros(size(xs_all));
 	for k=1:length(xs_all_aux);
-		ik=find(xs.==xs_all_aux[k]);
+		ik=findall(xs.==xs_all_aux[k]);
 		if ~isempty(ik)
 			ys_all[k]=ys_smooth[ik][1];
 		end
 	end	
 
-	A_x=find(ys_all.!=0);
+	A_x=findall(ys_all.!=0);
 	knots=(A_x,);
 	itp=interpolate(knots,ys_smooth, Gridded(Linear()));
 
-	A_nz=find(ys_all.==0);
+	A_nz=findall(ys_all.==0);
 	for i=1:length(A_nz);
 		ys_all[A_nz[i]]=itp[A_nz[i]];
 	end
 
-	expect=10.^ys_all;
+	expect=10 .^ ys_all;
 
 	return xs_all, expect;
 
@@ -195,8 +220,10 @@ end
 function get_f_W(W,ys);
 
 	N=size(W,1);
-	W[isnan(W)]=0;
-	dark_bins=find(sum(W,1).==0);
+	W[isnan.(W)] .= 0;
+	dark_bins=findall(sum(W,dims=1).==0);
+    #show(IOContext(stdout,:limit=>true),"text/plain",dark_bins);
+    #println();
 	num_dark=length(dark_bins);
 	N_eff=N-num_dark;
 	f_W=zeros(size(W));#what's f_W? it's a generation of ones(size(W));
@@ -204,15 +231,19 @@ function get_f_W(W,ys);
 	x=collect(1:N);
 
 	for d=0:N-1
-		f_W[1+d:N+1:end-d*N]=ys[d+1];
+		f_W[1+d:N+1:end-d*N] .= ys[d+1];
 	end
-	tmp=f_W-diagm(diag(f_W));
+	tmp=f_W-diagm(0 => diag(f_W));
 	f_W=f_W+tmp';
 	#sum(f_W[1,:])=1 here..
-
-	f_W[dark_bins,:]=0;
-	f_W[:,dark_bins]=0;
-	f_W=f_W/sum(f_W)*N_eff.^2;
+    
+    for i in dark_bins
+        f_W[i[1],i[2]] = 0;
+        f_W[i[2],i[1]] = 0;
+    end
+	#f_W[dark_bins,:] .= 0;
+    #f_W[:,dark_bins] .= 0;
+	f_W=f_W/sum(f_W)*N_eff .^ 2;
 
 	return f_W;
 
@@ -249,15 +280,13 @@ function local_smoothing(x,y);
     end
 
     for i=1:length(ux);
-        iz=find(x.==ux[i]);
+        iz=findall(x.==ux[i]);
         uy_smooth[i]=mean(mm[iz]);
     end
 
     return ux,uy_smooth;
 
 end
-
-
 
 ###################################################################################
 #this following code is the basic TAD calling code
@@ -271,44 +300,49 @@ function get_high_confidence_boundaries_and_domains(W,E_W,res,num_trial,sig_cut)
 		final_assign_x, Q1=optimize_TADs_modlouvain(W,E_W,res,0);
 		all_final_assign[:,x]=final_assign_x;
 		for cc=1:maximum(final_assign_x);
-			idcc=find(final_assign_x.==cc)[1];
+			idcc=findall(final_assign_x.==cc)[1];
 			all_bdd_rec[idcc,x]=1;
 		end
 		if final_assign_x[end].>0
 			all_bdd_rec[end,x]=1;
 		end
 	end
-	bdd_prob_score=mean(all_bdd_rec,2);
+	bdd_prob_score=mean(all_bdd_rec,dims=2);
 	#the actual modularity of the consensus domain is in fact lower that one the domains in one-trial
 	#but the boundaries are more confident...
+	bdd_prob_score=dropdims(bdd_prob_score,dims=2);
 	
-	tmp=find(bdd_prob_score.>=sig_cut);
+	tmp=findall(bdd_prob_score.>=sig_cut);
+
 	consensus_bdd=zeros(Int,size(bdd_prob_score));
-	consensus_bdd[tmp]=1;
+	consensus_bdd[tmp].=1;
 	consensus_domains=cumsum(consensus_bdd)[1:end-1];
-	unassign_score=mean(all_final_assign.==0,2)
-	i_unassign=find(unassign_score.>=sig_cut);
-	consensus_domains[i_unassign]=0;
-	TADs=consensus_domains+0;
-	(a,b)=hist(TADs,collect(-.5:maximum(TADs)+1));
+	unassign_score=dropdims(mean(all_final_assign.==0,dims=2),dims=2);
+	i_unassign=findall(unassign_score.>=sig_cut);
+	consensus_domains[i_unassign].=0;
+	TADs=consensus_domains.+0;
+	h=fit(Histogram,TADs,collect(-.5:maximum(TADs)+1))
+	#h.edges
+	b=h.weights;
+	#(a,b)=hist(TADs,collect(-.5:maximum(TADs)+1));
 	b=b[2:end];
 	#make sure all domains have pos number of reads..it is common that some bins with zero
 	#entry in diagonal form a single domains...
 	aux=zeros(size(b));
 	for j=1:length(b);
-		iz=find(TADs.==j);
+		iz=findall(TADs.==j);
 		if sum(W[iz,iz]).==0
 			TADs[iz]=0;
 			aux[j]=1;
 		end
 	end
 
-	TADs_final=relabel_communities(TADs)-1;
+	TADs_final=relabel_communities(TADs).-1;
 
-	bdd_aux=sign(TADs_final);
+	bdd_aux=sign.(TADs_final);
 	bdd_aux=[bdd_aux;0]+[0;bdd_aux];
 
-	bdd_prob_score=bdd_prob_score.*sign(bdd_aux);
+	bdd_prob_score=bdd_prob_score.*sign.(bdd_aux);
 
 	#bdd_prob_score.*(bdd_aux==2) to get the 2-sided boundaries
     #bdd_prob_score.*(bdd_aux==1) to get the 1-sided boundaries
@@ -325,12 +359,15 @@ function optimize_TADs_modlouvain(W,E_W,res,order=1);
 #order=0, random
 	
 	N=size(W,1);
-    i_no_dark=find(sum(abs(W),1).>0);
+    i_no_dark=findall(sum(abs.(W),dims=1).>0);
     N_no_dark=length(i_no_dark);
 
     B=W-E_W*res;
-    Bcompact=B[i_no_dark,i_no_dark];
-    Wcompact=W[i_no_dark,i_no_dark];
+    non_zero = [i[2] for i in i_no_dark]
+    Bcompact=B[non_zero,non_zero];
+    Wcompact=W[non_zero,non_zero];
+    #Bcompact=B[i_no_dark,i_no_dark];
+    #Wcompact=W[i_no_dark,i_no_dark];
     sW=sum(W);
 
     #(assign,Q,Brenorm)=iterate_TADs_modlouvain(Bcompact,sW,order);
@@ -343,27 +380,34 @@ function optimize_TADs_modlouvain(W,E_W,res,order=1);
         #(tmp_assign,tmp_Q,tmp_Brenorm)=iterate_TADs_modlouvain(Brenorm,sW,order);
         (tmp_assign,tmp_Q,tmp_Brenorm)=iterate_TADs_modlouvain_v2(Brenorm,sW,order);
         tmp_transfer=sparse(collect(1:size(tmp_assign,1)),tmp_assign,ones(size(tmp_assign)));
-        if isequal(tmp_transfer,speye(length(tmp_assign)))
+        if isequal(tmp_transfer,sparse(I,length(tmp_assign),length(tmp_assign)))
+        #if isequal(tmp_transfer,speye(length(tmp_assign)))
         	keep_doing=0;
         	#Brenorm, Wrenorm are optimal.
         else
 	        transfer=transfer*sparse(collect(1:size(tmp_assign,1)),tmp_assign,ones(size(tmp_assign)));
-        	Brenorm=tmp_Brenorm+0;
-        	Q=tmp_Q+0;
+        	Brenorm=tmp_Brenorm.+0;
+        	Q=tmp_Q.+0;
         end
     end
 
-    (u,v)=findn(transfer);
+    (u,v)=findnz(transfer);
     iu=sortperm(u);
     tmp_assign=v[iu];
     final_assign=zeros(Int,N);
-    final_assign[i_no_dark]=tmp_assign;
+
+    ##add the following line
+    non_zero = [i[2] for i in i_no_dark]
+    #final_assign[i_no_dark] .= tmp_assign;
+    final_assign[non_zero] .= tmp_assign;
 
     #pick up the zeros....dark bins...where should they belong?
     #look at two sides, if both sides are the same, merge them, if not, keep dark...
     #if the beginning is dark, i.e. loc=1. we kick it out
     #if the end is dark, i.e. loc[end:end+span-1]=0, we kick it out...
     (loc,span)=get_chunks_v2(final_assign,1);#
+    span=round.(Int64,span);
+
     #to break things into chunks, the number of chunks > number of domains above..
     #because 0 can be inserted into 2 sides with the same domains..
     if final_assign[1].==0
@@ -379,7 +423,8 @@ function optimize_TADs_modlouvain(W,E_W,res,order=1);
     for i=1:length(loc)
     	if final_assign[loc[i]].==0
     		if final_assign[loc[i]-1]==final_assign[loc[i]+span[i]];
-    			final_assign[loc[i]:loc[i]+span[i]-1]=final_assign[loc[i]-1];
+    			final_assign[loc[i]:loc[i]+span[i]-1].=final_assign[loc[i]-1];
+    			#final_assign[loc[i]:loc[i]+span[i]-1]=final_assign[loc[i]-1];
     		end
     	end
     end
@@ -413,14 +458,14 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
     	    gain = 0;
         	for j=1:Nb
         		#display(j);
-            	x=u[j];
-            	spin=sigma[x];
+            	x=u[j];#x is position index
+            	spin=sigma[x];#sigma is community label index..,spin is the label of x
             	if x==1
             		spin_f=sigma[x+1];
             		spin_b=sigma[x];
             	elseif x==Nb;
-            		spin_f=sigma[x];
-            		spin_b=sigma[x-1];
+            		spin_f=sigma[x];#label of forward neighbor
+            		spin_b=sigma[x-1];#label of forward neighbor
             	else 
             		spin_f=sigma[x+1];
             		spin_b=sigma[x-1];
@@ -429,13 +474,24 @@ function iterate_TADs_modlouvain_v2(Bcompact,sW,order);
            		c[x]=0;#this is important step to make sure the deltaQ is right ;
 
             	neighbors_spin=sigma;
-            	DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],squeeze(c',2)));
-                #DeltaQ=-sum(c'.*(sigma.==spin))+full(sparse(neighbors_spin,[1 for dd=1:Nb],c));
+            	#Q is obtained by sum over column and row index, whose labels are the same..
+            	#i.e. for each label, we sum over the column and row index with the same label..
+            	#the 1st term is the contribution of bins that have the same label as the bin of interest
+            	#when the bin of interest changes its label, this contribution will be lost,  c[x]=0 in line 454 make sures
+            	#the element from the bin of interests stay, because the label of the bin of interest will always be the same 
+            	#to itself no matter how does it update..
+            	#the 2nd is, for the bin of interest, to go over all possible updates in its label
+            	#because different update will result at sharing the updated label with a different set of bins
+
+                DeltaQ=-sum(c.*(sigma.==spin)).+Matrix(sparse(neighbors_spin,[1 for dd=1:Nb],c));#full(sparse(neighbors_spin,[1 for dd=1:Nb],c'));
+            	#DeltaQ=-sum(c'.*(sigma.==spin))+Matrix(sparse(neighbors_spin,[1 for dd=1:Nb],squeeze(c',2)));#full(sparse(neighbors_spin,[1 for dd=1:Nb],dropdims(c',dims=2)));
+                #DeltaQ=-sum(c'.*(sigma.==spin))+Matrix(sparse(neighbors_spin,[1 for dd=1:Nb],c));#full(sparse(neighbors_spin,[1 for dd=1:Nb],c));
             	#the 2nd term sum over the components from each community in advance
             	#1st term, the effect of getting rid of the original spin contribution..
             	#note the dim of DeltaQ is the number of communities
             	spin_choice=[spin_b spin spin_f];
-            	id=indmax(DeltaQ[spin_choice]);#choose 1 out of 3...
+            	#id=indmax(DeltaQ[spin_choice]);#choose 1 out of 3...
+            	no_use,id=findmax(DeltaQ[spin_choice]);
             	id=spin_choice[id];
             	new_spin=id;
             	if (new_spin!=spin)&(DeltaQ[id].>0);
@@ -483,10 +539,12 @@ function relabel_communities(sigma)
     u=sort(u);
     sigma_new=zeros(size(sigma));
     for i=1:length(u)
-        iz=findin(sigma,u[i]);
-        sigma_new[iz]=i;
+    	iz=findall(sigma.==u[i]);
+        #iz=findin(sigma,u[i]);
+        sigma_new[iz].=i;
     end
-    sigma_new=round(Int64,sigma_new);
+	sigma_new=round.(Int64,sigma_new);
+    #sigma_new=round(Int64,sigma_new);
     return sigma_new;
 end
 
@@ -495,7 +553,7 @@ function compute_modularity(sigma,Brenorm,sW);
     COMu = unique(sigma);
     Q=0;
     for k=1:length(COMu)
-        id = find(sigma.==COMu[k]);
+        id = findall(sigma.==COMu[k]);
         Q=Q+sum(Brenorm[id,id]);
     end
     Q=Q/sW;
@@ -511,23 +569,25 @@ function get_chunks_v2(a,singleton=0);
 	 b                 = diff(a);
 	 b1                = b;  # to be used in fullList (below)
 	 ii                = trues(size(b));
-	 ii[b.==0] = false;
-	 b[ii]             = 1;
+	 ii[b.==0] .= false;
+	 b[ii]             .= 1;
 	 c                 = diff(b);
-	 id                = find(c.==-1);
+	 id                = findall(c.==-1);
 
 	 #Get single-element chunks also
 	 if singleton.==1
-	 	b1[id]          = 0;
-	 	ii2             = find(b1[1:end-1]);
-	 	d               = vcat(find(c.==1) - id + 1, ones(length(ii2)));
+	 	b1[id]         .= 0;
+	 	ii2=findall(!iszero, b1[1:end-1])
+	 	#ii2             = findall(b1[1:end-1]);
+	 	d               = vcat(findall(c.==1) - id .+ 1, ones(length(ii2)));
 	 	id              = [id;ii2];
 	 	v=sortperm(id);
 	 	id=sort(id);
 	 	#(id,tmp)        = sort(id);
 	 	d               = d[v];
 	 else 
-	 	d               = find(c.==1) - id + 1;
+	 	d               = findall(c.==1) - id .+ 1;
+	 	#d 				= round.(Int64,d);
 	 end
 
 	 return id,d;
@@ -548,7 +608,7 @@ function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
 		end
 	end
     
-    TADs_list=DataFrame(chr=ASCIIString[],domain_st=Int64[],domain_ed=Int64[],domain_st_bin=Int64[],domain_ed_bin=Int64[],idx=Int64[]);
+    TADs_list=DataFrame(chr=String[],domain_st=Int64[],domain_ed=Int64[],domain_st_bin=Int64[],domain_ed_bin=Int64[],idx=Int64[]);
 
     st=chr2bins[:,chr_num][1]+1;#the bin count from zero in the stored file.
     ed=chr2bins[:,chr_num][2]+1;#we here shift it..
@@ -556,7 +616,7 @@ function report_domains(chr2bins,bin2loc,chr_num,TADs_final)
     #this will be the array mapped by elements in the chr of interest.
 
     if chr_num<=22
-        chr_string=string("chr",string(chr_num));
+        chr_string=string("chr",chr_num);
     elseif chr_num==23
         chr_string=string("chr","X");
     elseif chr_num==24 
@@ -619,7 +679,7 @@ function get_optimal_partition(W,E_W,res);
 
 			possibility[L]=sum(Q[ix,ix]);
 			Optimal[st[k],ed[k]]=maximum(possibility);
-			#traceback_aux[st[k],ed[k]]=find(possibility.==maximum(possibility));
+			#traceback_aux[st[k],ed[k]]=findall(possibility.==maximum(possibility));
 			traceback_aux[st[k],ed[k]]=indmax(possibility);
 		end
 	end
@@ -678,7 +738,7 @@ end
 
 function MI_two_partitions(a1,a2);
 
-	iz=find(a1+a2.>0);
+	iz=findall(a1+a2.>0);
 	a1=a1[iz];
 	a2=a2[iz];
     m1=maximum(a1);
@@ -691,16 +751,16 @@ function MI_two_partitions(a1,a2);
     P12=c12/sum(c12)
     
     H1=P1.*log2(P1);
-    H1[isnan(H1)]=0;
+    H1[isnan.(H1)]=0;
     H1=-sum(H1)
 
     H2=P2.*log2(P2);
-    H2[isnan(H2)]=0;
+    H2[isnan.(H2)]=0;
     H2=-sum(H2)
 
-    Z=P12./(P1*P2');
+    Z=P12 ./ (P1*P2');
     S=P12.*log2(Z);
-    S[isnan(S)]=0;
+    S[isnan.(S)]=0;
 
     MI=sum(S);
     MI_norm=2*MI/(H1+H2);
@@ -732,7 +792,7 @@ end
 function swap_boundaries(is_bdd);
 	is_bdd_r=BitArray(size(is_bdd));
 	is_bdd_r[:]=false;
-	u=find(is_bdd.>0);
+	u=findall(is_bdd.>0);
 	v=diff(u);
 	v_r=v[randperm(length(v))];
 	is_bdd_r[1]=true;
@@ -759,8 +819,8 @@ function TADs_list_to_bins(TADs_list,chr2bins);
     #this will be the array mapped by elements in the chr of interest.
 
     for i=1:size(TADs_list,1);
-        stm=find(chr2all_bin.==TADs_list[i,4])[1];
-        edm=find(chr2all_bin.==TADs_list[i,5])[1];
+        stm=findall(chr2all_bin.==TADs_list[i,4])[1];
+        edm=findall(chr2all_bin.==TADs_list[i,5])[1];
         bins2modules[stm:edm]=TADs_list[i,6];
     end
 
@@ -771,8 +831,8 @@ end
 function get_bdd_loc(is_bdd,chr_num,bin2loc)
 
 	bin_size=bin2loc[3,1]-bin2loc[2,1]+1;
-	i_bdd=find(is_bdd);
-	i_pick=find(bin2loc[1,:].==chr_num-1);
+	i_bdd=findall(is_bdd);
+	i_pick=findall(bin2loc[1,:].==chr_num-1);
 	st=bin2loc[2,i_pick];
 	ed=bin2loc[3,i_pick];
 	bdd_loc=[st' ed[end]]';
