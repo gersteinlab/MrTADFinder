@@ -103,6 +103,6 @@ Koon-Kiu Yan, koonkiu.yan@gmail.com; Mark Gerstein, mark@gersteinlab.org
 
 <h3>REFERENCE:</h3>
 Koon-Kiu Yan, Mark Gerstein: MrTADFinder: A network modularity based approach to identify topologically associating domains in multiple resolutions
-http://biorxiv.org/content/early/2016/12/29/097345
+https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005647
 
 
